@@ -23,7 +23,7 @@
   --r:10px;
 }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%;overscroll-behavior:none}
 body{
   margin:0;
   background:var(--ground);
@@ -34,20 +34,27 @@ body{
   -webkit-font-smoothing:antialiased;
   overflow:hidden;
 }
-button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+button{
+  font:inherit;color:inherit;cursor:pointer;border:none;background:none;
+  touch-action:manipulation;                 /* no 300ms tap delay */
+  -webkit-tap-highlight-color:transparent;
+}
+button,.brand,.tabs,.status,.hud{-webkit-user-select:none;user-select:none}
 button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{
   outline:2px solid var(--amber);outline-offset:2px;
 }
-input,select{
-  font:inherit;color:var(--ivory);background:var(--panel-2);
+input,select,textarea{
+  font:inherit;font-size:16px;   /* below 16px iOS zooms the page on focus */
+  color:var(--ivory);background:var(--panel-2);
   border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;width:100%;
 }
+input[type=range],input[type=checkbox]{font-size:inherit}
 select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 17px) 18px,calc(100% - 12px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
 input::placeholder{color:#5E7683}
 
 /* ---------- shell ---------- */
-.shell{display:grid;grid-template-columns:1fr 352px;height:100dvh}
+.shell{display:grid;grid-template-columns:1fr 352px;height:100vh;height:100dvh}
 .stage{position:relative;background:#060F14;overflow:hidden;display:flex;align-items:center;justify-content:center}
 video,canvas.overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 video{transform:scaleX(-1)}
@@ -55,15 +62,17 @@ video.nomirror{transform:none}
 canvas.overlay{pointer-events:none}
 
 .brand{
-  position:absolute;top:18px;left:20px;z-index:6;display:flex;align-items:baseline;gap:10px;
+  position:absolute;top:calc(18px + env(safe-area-inset-top));
+  left:calc(20px + env(safe-area-inset-left));z-index:6;display:flex;align-items:baseline;gap:10px;
   text-shadow:0 1px 14px rgba(0,0,0,.8);
 }
 .brand h1{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:28px;margin:0;letter-spacing:.01em}
 .brand span{color:var(--muted);font-size:12.5px}
 
 .status{
-  position:absolute;top:20px;right:20px;z-index:6;display:flex;align-items:center;gap:8px;
-  background:rgba(11,23,30,.72);backdrop-filter:blur(8px);
+  position:absolute;top:calc(20px + env(safe-area-inset-top));
+  right:calc(20px + env(safe-area-inset-right));z-index:6;display:flex;align-items:center;gap:8px;
+  background:rgba(11,23,30,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:999px;padding:6px 13px 6px 10px;font-size:13px;
 }
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none;transition:background .25s}
@@ -75,7 +84,7 @@ canvas.overlay{pointer-events:none}
 
 .hud{
   position:absolute;top:58px;right:20px;z-index:6;display:none;
-  background:rgba(11,23,30,.72);backdrop-filter:blur(8px);border:1px solid var(--line);
+  background:rgba(11,23,30,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);
   border-radius:8px;padding:8px 11px;font-size:12px;color:var(--muted);
   font-variant-numeric:tabular-nums;line-height:1.75;min-width:146px;
 }
@@ -84,14 +93,16 @@ canvas.overlay{pointer-events:none}
 
 /* ---------- bottom dock ---------- */
 .dock{
-  position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;
+  position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:6;
   display:flex;gap:8px;align-items:center;
-  background:rgba(11,23,30,.78);backdrop-filter:blur(10px);
+  background:rgba(11,23,30,.78);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
   border:1px solid var(--line);border-radius:999px;padding:8px;
   max-width:calc(100% - 32px);
 }
 .dock button{
-  padding:9px 16px;border-radius:999px;font-size:14px;font-weight:500;white-space:nowrap;
+  padding:11px 17px;border-radius:999px;font-size:14px;font-weight:500;white-space:nowrap;
+  min-height:44px;
   transition:background .15s,color .15s;
 }
 .dock button:hover{background:var(--panel-2)}
@@ -102,7 +113,7 @@ canvas.overlay{pointer-events:none}
 
 .quickadd{
   position:absolute;left:50%;bottom:78px;transform:translateX(-50%);z-index:7;
-  background:rgba(11,23,30,.86);backdrop-filter:blur(10px);border:1px solid var(--clay);
+  background:rgba(11,23,30,.86);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--clay);
   color:var(--ivory);border-radius:999px;padding:9px 17px;font-size:13.5px;display:none;
 }
 .quickadd.on{display:block}
@@ -166,7 +177,10 @@ canvas.overlay{pointer-events:none}
 .ticks i{width:3px;height:9px;border-radius:1px;background:var(--line)}
 .ticks i.on{background:var(--jade)}
 .ticks i.mid{background:var(--amber)}
-.person .ic{grid-row:1;color:var(--muted);font-size:15px;padding:0 5px;line-height:1}
+.person .ic{
+  grid-row:1;color:var(--muted);font-size:16px;line-height:1;
+  min-width:40px;min-height:40px;border-radius:8px;
+}
 .person .ic:hover{color:var(--ivory)}
 .person .del:hover{color:var(--clay)}
 
@@ -201,7 +215,7 @@ label.check .hint{display:block}
 /* ---------- enrol overlay ---------- */
 .capture{
   position:absolute;left:50%;bottom:92px;transform:translateX(-50%);z-index:7;
-  background:rgba(11,23,30,.88);backdrop-filter:blur(10px);border:1px solid var(--jade);
+  background:rgba(11,23,30,.88);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid var(--jade);
   border-radius:var(--r);padding:13px 18px;text-align:center;min-width:290px;max-width:calc(100% - 32px);
 }
 .capture.hidden{display:none}
@@ -230,13 +244,28 @@ label.check .hint{display:block}
 .toast.on{opacity:1}
 
 @media (max-width:860px){
-  .shell{grid-template-columns:1fr;grid-template-rows:56dvh 1fr}
+  .shell{grid-template-columns:1fr;grid-template-rows:56vh 1fr;grid-template-rows:56dvh 1fr}
   .rail{border-left:none;border-top:1px solid var(--line)}
   .brand h1{font-size:23px}
   .brand span{display:none}
-  .dock{bottom:14px;overflow-x:auto}
-  .capture{bottom:76px}
+  .dock{bottom:calc(14px + env(safe-area-inset-bottom));overflow-x:auto;max-width:calc(100% - 20px)}
+  .capture{bottom:calc(72px + env(safe-area-inset-bottom));min-width:0;width:calc(100% - 28px)}
+  .quickadd{bottom:calc(120px + env(safe-area-inset-bottom));font-size:13px}
+  /* a short stage puts the toast and the chip in each other's way */
+  .toast{top:calc(56px + env(safe-area-inset-top));font-size:12.5px;padding:7px 14px}
   .hud{display:none !important}
+  .pane{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+}
+/* a phone on its side has no vertical room to stack — go back to columns */
+@media (max-width:860px) and (orientation:landscape){
+  .shell{grid-template-columns:1fr minmax(240px,42%);grid-template-rows:none}
+  .rail{border-left:1px solid var(--line);border-top:none}
+  .capture{bottom:calc(64px + env(safe-area-inset-bottom))}
+}
+@media (max-width:420px){
+  .dock button{padding:11px 13px;font-size:13.5px}
+  .capture{padding:11px 13px}
+  .capture .bars i{width:16px}
 }
 </style>
 </head>
@@ -245,10 +274,10 @@ label.check .hint{display:block}
 <div class="shell">
   <div class="stage">
     <video id="vid" playsinline muted autoplay></video>
-    <canvas id="ov" class="overlay"></canvas>
+    <canvas id="ov" class="overlay" aria-hidden="true"></canvas>
 
     <div class="brand"><h1>Facegate</h1><span>nothing leaves this device</span></div>
-    <div class="status"><span class="dot" id="sdot"></span><span id="stxt">Locked</span></div>
+    <div class="status"><span class="dot" id="sdot"></span><span id="stxt" role="status" aria-live="polite">Locked</span></div>
 
     <div class="hud" id="hud">
       <div>detect <b id="hFps">—</b></div>
@@ -260,8 +289,8 @@ label.check .hint{display:block}
 
     <div class="capture hidden" id="cap">
       <div class="who" id="capwho"></div>
-      <div class="cue" id="capcue"></div>
-      <div class="why" id="capwhy"></div>
+      <div class="cue" id="capcue" role="status" aria-live="polite"></div>
+      <div class="why" id="capwhy" aria-live="polite"></div>
       <div class="qmeter">
         <span><b id="qLight"></b>light</span>
         <span><b id="qSharp"></b>sharp</span>
@@ -280,7 +309,7 @@ label.check .hint{display:block}
       <button id="btnStopEnrol" class="stop" style="display:none">Cancel</button>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <!-- passphrase gate -->
     <div class="veil" id="gate">
@@ -294,7 +323,7 @@ label.check .hint{display:block}
           <label for="pass2">Confirm passphrase</label>
           <input type="password" id="pass2" autocomplete="new-password">
         </div>
-        <div class="err" id="gErr"></div>
+        <div class="err" id="gErr" role="alert"></div>
         <button class="go" id="gGo">Unlock</button>
         <button class="alt" id="gReset">Erase vault and start over</button>
       </div>
@@ -303,11 +332,11 @@ label.check .hint{display:block}
     <!-- model loader -->
     <div class="veil hidden" id="boot">
       <div class="card">
-        <h2 id="bootTitle">Loading the recognition models</h2>
-        <p id="bootMsg">About 7 MB, fetched once and stored inside this vault’s database. After that the app runs with no internet at all.</p>
+        <h2>Loading the recognition models</h2>
+        <p>About 7 MB, fetched once and stored inside this vault’s database. After that the app runs with no internet at all.</p>
         <div class="loadbar"><i id="bootBar"></i></div>
         <div class="bootlog" id="bootLog"></div>
-        <div class="err" id="bootErr"></div>
+        <div class="err" id="bootErr" role="alert"></div>
         <div class="offlinehelp" id="offlineHelp">
           To run fully offline, download the face-api.js weights and pick the folder below — they are stored in this browser and reused forever. Needed files:
           <code>tiny_face_detector_model-weights_manifest.json</code>
@@ -481,6 +510,16 @@ const DEFAULTS={
 };
 const cfg=Object.assign({}, DEFAULTS);
 try{ Object.assign(cfg, JSON.parse(localStorage.getItem('fg.cfg')||'{}')); }catch(e){}
+(function validateCfg(){
+  const num=(k,lo,hi)=>{ const v=Number(cfg[k]); cfg[k]=isFinite(v)?clamp(v,lo,hi):DEFAULTS[k]; };
+  if(!['fast','balanced','best'].includes(cfg.mode)) cfg.mode=DEFAULTS.mode;
+  if(![640,1280,1920].includes(Number(cfg.res))) cfg.res=DEFAULTS.res; else cfg.res=Number(cfg.res);
+  num('thresh',0.32,0.62); num('margin',0,0.16);
+  cfg.frames=Math.round(clamp(Number(cfg.frames)||DEFAULTS.frames,1,8));
+  cfg.shots=Math.round(clamp(Number(cfg.shots)||DEFAULTS.shots,4,12));
+  for(const k of ['adapt','liveness','mirror','showMarks','showHud']) cfg[k]=!!cfg[k];
+  if(typeof cfg.camId!=='string') cfg.camId='';
+})();
 function saveCfg(){
   const out={}; for(const k of Object.keys(DEFAULTS)) out[k]=cfg[k];
   try{ localStorage.setItem('fg.cfg', JSON.stringify(out)); }catch(e){}
@@ -490,10 +529,11 @@ const state={
   key:null, people:[], running:false, stream:null,
   inputSize:null, warnedSlow:false,
   facing:'user', enrolling:null, modelsReady:false,
-  tracks:[], seen:new Set(), nextTrack:1, goodSource:null, libSource:null
+  tracks:[], seen:new Set(), nextTrack:1, goodSource:null, libSource:null,
+  loopId:0, paused:false, dirty:true, lastDraw:0
 };
 
-const engine={ detMs:0, descMs:0, fps:0, frames:0, fpsAt:0, backend:'—', faces:0, errors:0, lastError:null, avgDet:null, cycleMs:null };
+const engine={ detMs:0, descMs:0, fps:0, frames:0, fpsAt:0, backend:'—', faces:0, errors:0, avgDet:null, cycleMs:null };
 
 /* ================= storage ================= */
 const DB='facegate', STORE='vault', WSTORE='weights';
@@ -554,14 +594,14 @@ async function deriveKey(pass, salt, iters){
 async function seal(key, obj){
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(JSON.stringify(obj)));
-  return {iv:[...iv], ct:[...new Uint8Array(ct)]};
+  return {iv, ct:new Uint8Array(ct)};   // reading still accepts plain arrays
 }
 async function open_(key, blob){
   const ct=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(blob.iv)}, key, new Uint8Array(blob.ct));
   return JSON.parse(dec.decode(ct));
 }
 function strip(people){
-  return people.map(p=>({id:p.id, name:p.name, descriptors:p.descriptors, created:p.created, lastLearn:p.lastLearn, lastSeen:p.lastSeen}));
+  return people.map(p=>({id:p.id, name:p.name, descriptors:p.descriptors, created:p.created, lastSeen:p.lastSeen}));
 }
 async function savePeople(){
   if(!state.key) return;
@@ -571,7 +611,16 @@ async function savePeople(){
 /* ================= gate ================= */
 const gate=$('gate');
 let creating=false;
+const SECURE = window.isSecureContext && !!(window.crypto && crypto.subtle);
+if(!SECURE){
+  $('gTitle').textContent='This page needs a secure connection';
+  $('gSub').innerHTML='Browsers only allow the camera and the encryption this app uses on <b>https://</b> or <b>localhost</b>. '+
+    'Opening it over plain http — a LAN address such as 192.168.x.x, for instance — disables both.';
+  $('pass1').disabled=true; $('gGo').disabled=true;
+  $('gErr').textContent='Reopen this page over https:// or from localhost.';
+}
 (async function initGate(){
+  if(!SECURE) return;
   let salt=null;
   try{ salt=await get('salt'); }
   catch(e){ $('gErr').textContent='This browser blocked local storage, so the vault cannot open. Private/incognito windows often do this.'; }
@@ -928,40 +977,52 @@ async function startCam(){
     state.stream=await navigator.mediaDevices.getUserMedia({video, audio:false});
     vid.srcObject=state.stream;
     await vid.play();
-    await waitForVideo();
+    if(!await waitForVideo()){
+      stopCam();
+      toast('The camera opened but sent no video. Close other apps using it, or pick another camera in Settings.', 6000);
+      setStatus('No video','warn');
+      return;
+    }
     sizeOverlay();
     state.running=true;
     state.tracks=[];
+    const myLoop = ++state.loopId;   // retires any loop from a previous start
     $('btnCam').textContent='Stop camera';
     $('btnCam').classList.remove('primary');
     setStatus('Scanning','live');
     listCameras();
-    pump();
-    render();
+    pump(myLoop);
+    render(myLoop);
   }catch(e){
     const why = e.name==='NotAllowedError'
       ? 'Camera access was blocked. Allow it in your browser’s site settings, then try again.'
       : e.name==='NotFoundError' ? 'No camera found on this device.'
       : e.name==='NotReadableError' ? 'The camera is already in use by another app.'
-      : e.name==='OverconstrainedError' ? 'That camera cannot do the chosen resolution. Pick a lower one in Settings.'
+      : e.name==='OverconstrainedError' ? (cfg.camId
+          ? 'That saved camera is no longer available. Trying the default one next time.'
+          : 'That camera cannot do the chosen resolution. Pick a lower one in Settings.')
       : 'Camera failed to start: '+e.message;
+    if(e.name==='OverconstrainedError' && cfg.camId){ cfg.camId=''; saveCfg(); }
     toast(why, 5200);
     setStatus('Camera blocked','warn');
   }
 }
 function waitForVideo(){
-  if(vid.videoWidth) return Promise.resolve();
+  if(vid.videoWidth) return Promise.resolve(true);
   return new Promise(res=>{
-    const t=setTimeout(res, 3000);
-    vid.addEventListener('loadedmetadata', ()=>{ clearTimeout(t); res(); }, {once:true});
+    const t=setTimeout(()=>res(false), 6000);
+    vid.addEventListener('loadedmetadata', ()=>{ clearTimeout(t); res(true); }, {once:true});
   });
 }
 function sizeOverlay(){
   if(!vid.videoWidth) return;
-  ov.width=vid.videoWidth; ov.height=vid.videoHeight;
+  if(ov.width===vid.videoWidth && ov.height===vid.videoHeight) return;
+  ov.width=vid.videoWidth; ov.height=vid.videoHeight;   // this clears the canvas
+  invalidate();
 }
 function stopCam(){
   state.running=false;
+  state.loopId++;                  // anything still awaiting is now stale
   if(state.stream) state.stream.getTracks().forEach(t=>t.stop());
   state.stream=null; vid.srcObject=null;
   ctx.clearRect(0,0,ov.width,ov.height);
@@ -978,12 +1039,19 @@ async function listCameras(){
   try{
     const devs=await navigator.mediaDevices.enumerateDevices();
     const cams=devs.filter(d=>d.kind==='videoinput');
-    if(cams.length<2) return;
     const sel=$('camsel');
+    if(!cams.length) return;
     sel.innerHTML='<option value="">Default camera</option>'+
       cams.map((c,i)=>`<option value="${c.deviceId}">${esc(c.label||('Camera '+(i+1)))}</option>`).join('');
+    if(cfg.camId && !cams.some(c=>c.deviceId===cfg.camId)){
+      cfg.camId='';           // that camera is gone; stop asking for it
+      saveCfg();
+    }
     sel.value=cfg.camId||'';
   }catch(e){}
+}
+if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
+  navigator.mediaDevices.addEventListener('devicechange', ()=>{ if(state.running) listCameras(); });
 }
 $('camsel').addEventListener('change', async ()=>{
   cfg.camId=$('camsel').value; saveCfg();
@@ -1021,14 +1089,16 @@ function adaptSpeed(){
 const useTinyLandmarks = ()=> cfg.mode==='fast' && faceapi.nets.faceLandmark68TinyNet.isLoaded;
 const TARGET_FPS = ()=> cfg.mode==='best' ? 10 : cfg.mode==='fast' ? 20 : 15;
 
-async function pump(){
-  while(state.running){
+async function pump(loopId){
+  window.__fgLoops=(window.__fgLoops||0)+1;   // diagnostic: should never exceed 1
+  try{
+  while(state.running && loopId===state.loopId){
+    if(state.paused){ await sleep(250); continue; }
     const t0=performance.now();
     try{ await cycle(); engine.errors=0; adaptSpeed(); }
     catch(e){
       // one-off decode hiccups are normal; a persistent fault is not, and
       // silently looping on it is how a screen ends up doing nothing
-      engine.lastError=e;
       if(++engine.errors===25){
         console.error('Facegate: recognition loop failing repeatedly', e);
         toast('Recognition is failing on this device: '+(e && e.message || e), 6000);
@@ -1038,9 +1108,11 @@ async function pump(){
     const spent=performance.now()-t0;
     engine.cycleMs = engine.cycleMs==null ? spent : engine.cycleMs*0.8 + spent*0.2;
     engine.frames++;
+    if(!engine.fpsAt) engine.fpsAt=t0;
     if(t0-engine.fpsAt>1000){ engine.fps=engine.frames*1000/(t0-engine.fpsAt); engine.frames=0; engine.fpsAt=t0; }
     await sleep(Math.max(0, (1000/TARGET_FPS())-spent));
   }
+  }finally{ window.__fgLoops--; }
 }
 
 async function cycle(){
@@ -1056,6 +1128,7 @@ async function cycle(){
 
   const now=performance.now();
   syncTracks(res, now);
+  invalidate();
 
   const targets=descriptorTargets(now);
   if(state.enrolling && !targets.length){
@@ -1128,9 +1201,9 @@ function newTrack(r, now){
   const b=r.detection.box;
   return {
     id:'t'+(state.nextTrack++), det:r, raw:b, box:{x:b.x,y:b.y,width:b.width,height:b.height},
-    seenAt:now, bornAt:now, lastDescAt:0, q:null,
+    seenAt:now, lastDescAt:0, q:null,
     cand:null, hits:0, smooth:null, rawDist:null, margin:null, person:null, locked:false,
-    ear:[], blinkState:0, blinked:false, unknownSince:0
+    blinkState:0, blinked:false, unknownSince:0
   };
 }
 function attach(t, r, now){
@@ -1141,7 +1214,7 @@ function attach(t, r, now){
     x:t.box.x+(b.x-t.box.x)*k, y:t.box.y+(b.y-t.box.y)*k,
     width:t.box.width+(b.width-t.box.width)*k, height:t.box.height+(b.height-t.box.height)*k
   };
-  trackEAR(t, r.landmarks, now);
+  trackEAR(t, r.landmarks);
 }
 
 /* Descriptors are the expensive part, so only compute them where they can
@@ -1241,14 +1314,13 @@ function earOf(pts){
                          (2*Math.hypot(pts[a].x-pts[d].x,pts[a].y-pts[d].y)||1);
   return (e(36,37,38,39,40,41)+e(42,43,44,45,46,47))/2;
 }
-function trackEAR(t, lm, now){
+function trackEAR(t, lm){
   if(!lm) return;
   let v;
   try{ v=earOf(lm.positions); }catch(e){ return; }
   if(!isFinite(v)) return;
-  t.ear.push(v); if(t.ear.length>14) t.ear.shift();
   if(t.blinkState===0 && v<0.185) t.blinkState=1;
-  else if(t.blinkState===1 && v>0.245){ t.blinkState=0; t.blinked=true; t.blinkAt=now; }
+  else if(t.blinkState===1 && v>0.245){ t.blinkState=0; t.blinked=true; }
 }
 
 /* ================= matching =================
@@ -1307,11 +1379,14 @@ function classify(t, desc, now){
   t.person=cand ? state.people.find(p=>p.id===cand)||null : null;
   t.locked=t.hits>=cfg.frames;
   t.lowQuality = !!(q && !qualityOk);
+  invalidate();
 
   if(t.locked && !t.person){ if(!t.unknownSince) t.unknownSince=now; }
   else t.unknownSince=0;
 
-  if(t.locked && t.person && cfg.adapt) maybeLearn(t, desc, now);
+  if(t.locked && t.person && cfg.adapt){
+    maybeLearn(t, desc, now).catch(e=>console.warn('Facegate: could not save a learned sample', e));
+  }
 }
 function verified(t){ return !cfg.liveness || t.blinked; }
 
@@ -1328,7 +1403,7 @@ async function maybeLearn(t, desc, now){
   let closest=Infinity;
   for(const d of p.descriptors) closest=Math.min(closest, l2(arr,d));
   if(closest < 0.20) return;            // nothing new to learn from
-  p._lastLearn=now; p.lastLearn=Date.now();
+  p._lastLearn=now;
   p.descriptors.push(arr);
   prune(p, LEARN_CAP);
   p._cen=null;
@@ -1358,7 +1433,7 @@ function updateSeen(){
       t.person.lastSeen=Date.now();
     }
   }
-  if(!setsEqual(s, state.seen)){ state.seen=s; renderRoster(); }
+  if(!setsEqual(s, state.seen)){ state.seen=s; paintSeen(); }
   const unknown=state.tracks.find(t=>t.det && t.locked && !t.person && t.unknownSince && now-t.unknownSince>1200);
   $('quickAdd').classList.toggle('on', !!unknown && !state.enrolling);
 }
@@ -1374,11 +1449,19 @@ function confidenceOf(d){
 
 /* ================= painting ================= */
 const TONES={amber:'#E8A33D', clay:'#D0685F', jade:'#5FA88C', muted:'#8AA0AB', violet:'#8E86C9'};
-function render(){
-  if(!state.running) return;
-  draw();
-  requestAnimationFrame(render);
+/* Boxes only move when a detection lands, so redrawing 60 times a second
+   repaints the same pixels ~55 times for nothing. Draw when something
+   actually changed, with a slow heartbeat for the idle message. */
+function render(loopId){
+  if(!state.running || loopId!==state.loopId) return;
+  const now=performance.now();
+  if(state.dirty || now-state.lastDraw>400){
+    state.dirty=false; state.lastDraw=now;
+    draw();
+  }
+  requestAnimationFrame(()=>render(loopId));
 }
+function invalidate(){ state.dirty=true; }
 function draw(){
   ctx.clearRect(0,0,ov.width,ov.height);
   const mir=cfg.mirror && state.facing==='user';
@@ -1498,14 +1581,10 @@ function relaxLevel(e, now){
   if(w>4000)  return 1;      // widen the pose bands
   return 0;
 }
-const GATES=[
-  {lo:42, hi:228, contrast:18, sharp:34, sizeFrac:0.062, sizeMin:80, roll:28, det:0.50},
-  {lo:42, hi:228, contrast:18, sharp:34, sizeFrac:0.062, sizeMin:80, roll:28, det:0.50},
-  {lo:30, hi:240, contrast:12, sharp:20, sizeFrac:0.050, sizeMin:64, roll:34, det:0.35},
-  {lo:30, hi:240, contrast:12, sharp:20, sizeFrac:0.050, sizeMin:64, roll:34, det:0.35}
-];
+const GATE_STRICT={lo:42, hi:228, contrast:18, sharp:34, sizeFrac:0.062, sizeMin:80, roll:28, det:0.50};
+const GATE_FLOOR ={lo:30, hi:240, contrast:12, sharp:20, sizeFrac:0.050, sizeMin:64, roll:34, det:0.35};
 function qualityFail(q, lvl){
-  const g=GATES[Math.min(Math.max(lvl,0),3)];
+  const g = lvl>=2 ? GATE_FLOOR : GATE_STRICT;
   if(q.size < Math.max(g.sizeMin, ov.width*g.sizeFrac)) return 'Come closer to the camera';
   if(q.light < g.lo) return 'Too dark — find more light';
   if(q.light > g.hi) return 'Too bright';
@@ -1717,7 +1796,7 @@ function renderRoster(){
     const quality = n<8 ? '<span class="pill bad">add more poses</span>'
                   : n<16 ? '<span class="pill warn">good</span>'
                   : '<span class="pill good">strong</span>';
-    return `<li class="person ${state.seen.has(p.id)?'seen':''}">
+    return `<li class="person ${state.seen.has(p.id)?'seen':''}" data-id="${p.id}">
       <span class="nm">${esc(p.name)}</span>
       <button class="ic ren" data-id="${p.id}" title="Rename ${esc(p.name)}" aria-label="Rename ${esc(p.name)}">✎</button>
       <button class="ic del" data-id="${p.id}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">×</button>
@@ -1737,6 +1816,13 @@ function renderRoster(){
     p.name=name; await savePeople(); renderRoster();
   }));
 }
+/* only the highlight changes as people come and go — no need to rebuild
+   the list and rebind every button for that */
+function paintSeen(){
+  for(const li of $('roster').children){
+    li.classList.toggle('seen', state.seen.has(li.dataset.id));
+  }
+}
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ================= tabs ================= */
@@ -1751,6 +1837,17 @@ function showPane(which){
 $('tabPeople').addEventListener('click',()=>showPane('People'));
 $('tabAdd').addEventListener('click',()=>showPane('Add'));
 $('tabSet').addEventListener('click',()=>showPane('Settings'));
+(function tabKeys(){
+  const order=['People','Add','Settings'];
+  const tabs=order.map(k=>$(panes[k][0]));
+  tabs.forEach((tab,i)=>tab.addEventListener('keydown', e=>{
+    const d = e.key==='ArrowRight' ? 1 : e.key==='ArrowLeft' ? -1 : 0;
+    if(!d) return;
+    e.preventDefault();
+    const n=(i+d+order.length)%order.length;
+    showPane(order[n]); tabs[n].focus();
+  }));
+})();
 
 /* ================= settings ================= */
 function bindRange(id, outId, key, parse, fmt){
@@ -1827,7 +1924,9 @@ $('btnExport').addEventListener('click', async ()=>{
     const salt=await get('salt');
     const kdf=await get('kdf');
     const blob=await seal(state.key, strip(state.people));
-    const payload={format:'facegate.v2', salt, kdf:{iters:(kdf&&kdf.iters)||KDF_LEGACY}, vault:blob};
+    const payload={format:'facegate.v2', salt:Array.from(salt),
+      kdf:{iters:(kdf&&kdf.iters)||KDF_LEGACY},
+      vault:{iv:Array.from(blob.iv), ct:Array.from(blob.ct)}};   // JSON needs plain arrays
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));
     a.download=`facegate-backup-${new Date().toISOString().slice(0,10)}.json`;
@@ -1853,8 +1952,15 @@ $('fileIn').addEventListener('change', async ev=>{
     try{ incoming=await open_(key, data.vault); }
     catch(e){ throw new Error('wrong passphrase for that backup'); }
     let added=0, merged=0;
+    if(!Array.isArray(incoming)) throw new Error('that backup is not a roster');
     for(const p of incoming){
-      if(!p || !Array.isArray(p.descriptors)) continue;
+      if(!p || typeof p.name!=='string' || !Array.isArray(p.descriptors)) continue;
+      p.descriptors=p.descriptors
+        .filter(d=>(Array.isArray(d)||ArrayBuffer.isView(d)) && d.length===128 &&
+                   Array.from(d).every(v=>typeof v==='number' && isFinite(v)))
+        .map(d=>Array.from(d));
+      if(!p.descriptors.length) continue;
+      p.name=p.name.slice(0,80);
       const hit=state.people.find(x=>x.name.toLowerCase()===String(p.name).toLowerCase());
       if(hit){
         hit.descriptors.push(...p.descriptors.map(d=>Array.from(d)));
@@ -1883,10 +1989,18 @@ function toast(msg, ms=2600){
 window.addEventListener('resize', sizeOverlay);
 vid.addEventListener('loadedmetadata', sizeOverlay);
 document.addEventListener('visibilitychange', ()=>{
-  if(document.hidden && state.enrolling) cancelEnrol();
+  state.paused=document.hidden;
+  if(document.hidden){
+    if(state.enrolling) cancelEnrol();
+  }else{
+    state.tracks=[];        // whatever was on screen is long gone
+    invalidate();
+  }
 });
 window.addEventListener('keydown', e=>{
-  if(e.target.matches('input,select,textarea')) return;
+  if(e.repeat) return;
+  // a focused button already fires its own click on Space/Enter
+  if(e.target.closest && e.target.closest('input,select,textarea,button,[role=tab]')) return;
   if(e.key===' '){ e.preventDefault(); state.running?stopCam():startCam(); }
   if(e.key==='Escape') cancelEnrol();
 });
