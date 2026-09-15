@@ -71,6 +71,23 @@ On a slow device the detector automatically drops to a smaller input size and
 says so. The performance readout in Settings shows the frame rate, per-frame
 cost and which compute backend is in use.
 
+## Devices
+
+- **Secure context required.** Browsers only expose the camera and Web Crypto on
+  `https://` or `localhost`. Opening the page over a plain LAN address disables
+  both; the app says so up front instead of failing later.
+- **Phones.** Portrait stacks the camera over the panel, landscape puts them
+  side by side, and the controls clear notches and home indicators. Inputs are
+  16px so iOS does not zoom the page when you focus a field.
+- **Slow or old hardware.** If detection gets expensive the detector input size
+  steps down automatically and the app tells you. Where WebGL is unavailable it
+  falls back to CPU rather than failing to start.
+- **Battery.** Detection stops while the tab is hidden and the overlay only
+  repaints when something actually changed.
+- **Keyboard and screen readers.** Arrow keys move between tabs, Space activates
+  the focused control, Escape cancels a capture, and status messages are
+  announced. Space toggles the camera only when nothing else has focus.
+
 ## Accuracy
 
 A match is evidence, not proof. On a small roster in good light expect roughly
