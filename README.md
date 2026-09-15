@@ -36,6 +36,9 @@ face_recognition_model-shard1
 face_recognition_model-shard2
 ```
 
+Some mirrors ship the weights as a single `*_model.bin` per net instead of
+`-shard1`/`-shard2`; both layouts work and both are cached.
+
 They live in the `weights/` folder of
 [justadudewhohacks/face-api.js](https://github.com/justadudewhohacks/face-api.js).
 *Best* accuracy mode additionally uses `ssd_mobilenetv1_model-*` (5.4 MB) and
@@ -45,6 +48,28 @@ Facegate falls back to a mode it can actually run rather than failing.
 To run with no network whatsoever, also save `face-api.min.js` as
 `vendor/face-api.min.js` next to `index.html` — that path is tried before any
 CDN.
+
+## If enrolment seems stuck
+
+Capturing is deliberately fussy, but it will never block forever:
+
+- The panel always says what it is waiting for — "Too dark", "Turn a bit
+  more", "No face detected". If it says nothing at all, the camera is not
+  delivering frames.
+- Each pose relaxes its requirements the longer it waits: after ~4s the pose
+  bands widen, after ~7.5s pose is ignored entirely, and after ~13s you are
+  offered **Capture this pose now**, which takes the frame regardless.
+- Image quality never relaxes below a floor, because a sample too poor to help
+  makes recognition worse. If that floor is what is blocking you, the manual
+  button is the way past it.
+- The first pose doubles as calibration: it waits for you to hold still, then
+  measures every later pose as a movement away from that. Where a person's
+  nose sits relative to their eyes and chin varies enough between faces that
+  judging "looking straight ahead" by a fixed number does not work.
+
+On a slow device the detector automatically drops to a smaller input size and
+says so. The performance readout in Settings shows the frame rate, per-frame
+cost and which compute backend is in use.
 
 ## Accuracy
 

@@ -215,6 +215,11 @@ label.check .hint{display:block}
 .qmeter span{display:flex;align-items:center;gap:4px}
 .qmeter b{width:7px;height:7px;border-radius:50%;background:var(--clay);display:inline-block}
 .qmeter b.ok{background:var(--jade)}
+.capture .capnow{
+  margin-top:10px;width:100%;padding:7px;border-radius:999px;font-size:13px;
+  border:1px solid var(--line);color:var(--muted);background:var(--panel-2);
+}
+.capture .capnow:hover{color:var(--ivory);border-color:var(--muted)}
 
 .toast{
   position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:9;
@@ -264,6 +269,7 @@ label.check .hint{display:block}
         <span><b id="qPose"></b>pose</span>
       </div>
       <div class="bars" id="capbars"></div>
+      <button class="capnow" id="capNow">Capture this pose now</button>
     </div>
 
     <button class="quickadd" id="quickAdd">Unknown face — add to roster</button>
@@ -482,11 +488,12 @@ function saveCfg(){
 
 const state={
   key:null, people:[], running:false, stream:null,
+  inputSize:null, warnedSlow:false,
   facing:'user', enrolling:null, modelsReady:false,
   tracks:[], seen:new Set(), nextTrack:1, goodSource:null, libSource:null
 };
 
-const engine={ detMs:0, descMs:0, fps:0, frames:0, fpsAt:0, backend:'—', faces:0 };
+const engine={ detMs:0, descMs:0, fps:0, frames:0, fpsAt:0, backend:'—', faces:0, errors:0, lastError:null, avgDet:null, cycleMs:null };
 
 /* ================= storage ================= */
 const DB='facegate', STORE='vault', WSTORE='weights';
@@ -680,7 +687,7 @@ async function ensureLib(){
    served from there afterwards. Once the models have loaded a single time,
    this app never needs the network again — including after a cache purge,
    because IndexedDB is not the HTTP cache. */
-const MODEL_RE=/^(tiny_face_detector|ssd_mobilenetv1|face_landmark_68_tiny|face_landmark_68|face_recognition|face_expression)_model(-weights_manifest\.json|-shard\d+)$/;
+const MODEL_RE=/^(tiny_face_detector|ssd_mobilenetv1|face_landmark_68_tiny|face_landmark_68|face_recognition|face_expression)_model(-weights_manifest\.json|-shard\d+|\.bin)$/;
 const MODEL_SOURCES=[
   './models',
   './weights',
@@ -792,14 +799,31 @@ async function bootModels(){
   try{
     bar.style.width='4%';
     await ensureLib();
-    try{ faceapi.env.monkeyPatch({ fetch: cachingFetch(window.fetch.bind(window)) }); }catch(e){}
+    // monkeyPatch replaces createCanvasElement/createImageElement with
+    // `new Canvas()` / `new Image()` for ANY key it is given, and in a browser
+    // `new HTMLCanvasElement()` throws "Illegal constructor" — which kills
+    // every frame of detection. Pass the browser factories back explicitly.
+    try{
+      faceapi.env.monkeyPatch({
+        fetch: cachingFetch(window.fetch.bind(window)),
+        createCanvasElement: ()=>document.createElement('canvas'),
+        createImageElement: ()=>document.createElement('img')
+      });
+    }catch(e){ bootLog('could not install the weight cache: '+(e.message||e),'bad'); }
+    // setBackend resolves false rather than throwing when a backend is
+    // missing, so check the result before relying on it — a machine without
+    // WebGL should fall back, not fail to load the models at all.
     try{
       if(faceapi.tf && faceapi.tf.setBackend){
-        await faceapi.tf.setBackend('webgl').catch(()=>faceapi.tf.setBackend('cpu'));
-        await faceapi.tf.ready();
+        for(const b of ['webgl','cpu']){
+          try{
+            if(await faceapi.tf.setBackend(b)){ await faceapi.tf.ready(); break; }
+          }catch(e){}
+        }
         engine.backend=faceapi.tf.getBackend ? faceapi.tf.getBackend() : '—';
+        bootLog('compute backend: '+engine.backend);
       }
-    }catch(e){ engine.backend='cpu'; }
+    }catch(e){ engine.backend='unknown'; }
 
     // The detector and the recognition net are the two that cannot be
     // substituted; everything else degrades to a working alternative rather
@@ -967,11 +991,32 @@ $('camsel').addEventListener('change', async ()=>{
 });
 
 /* ================= detection engine ================= */
+/* On a slow device (no WebGL, an old phone) a fixed input size turns the
+   whole page to treacle and looks like the app has hung. Step the detector
+   down when frames get expensive, and back up when they get cheap again. */
+const SIZES=[224,320,416,512];
+function baseSize(){ return cfg.mode==='fast' ? 320 : 512; }
 function detOpts(){
   if(cfg.mode==='best' && faceapi.nets.ssdMobilenetv1.isLoaded)
     return new faceapi.SsdMobilenetv1Options({minConfidence:0.45, maxResults:16});
-  const inputSize = cfg.mode==='fast' ? 320 : 512;
-  return new faceapi.TinyFaceDetectorOptions({inputSize, scoreThreshold:0.4});
+  return new faceapi.TinyFaceDetectorOptions({
+    inputSize: state.inputSize || baseSize(), scoreThreshold:0.4
+  });
+}
+function adaptSpeed(){
+  if(cfg.mode==='best' && faceapi.nets.ssdMobilenetv1.isLoaded) return;
+  engine.avgDet = engine.avgDet==null ? engine.detMs : engine.avgDet*0.8 + engine.detMs*0.2;
+  const cur = state.inputSize || baseSize();
+  const i = SIZES.indexOf(cur);
+  if(engine.avgDet>650 && i>0){
+    state.inputSize=SIZES[i-1]; engine.avgDet=null;
+    if(!state.warnedSlow){
+      state.warnedSlow=true;
+      toast('This device is slow at recognition — reducing detector detail to keep up', 4600);
+    }
+  }else if(engine.avgDet<170 && cur<baseSize()){
+    state.inputSize=SIZES[Math.min(SIZES.length-1, i+1)]; engine.avgDet=null;
+  }
 }
 const useTinyLandmarks = ()=> cfg.mode==='fast' && faceapi.nets.faceLandmark68TinyNet.isLoaded;
 const TARGET_FPS = ()=> cfg.mode==='best' ? 10 : cfg.mode==='fast' ? 20 : 15;
@@ -979,9 +1024,19 @@ const TARGET_FPS = ()=> cfg.mode==='best' ? 10 : cfg.mode==='fast' ? 20 : 15;
 async function pump(){
   while(state.running){
     const t0=performance.now();
-    try{ await cycle(); }
-    catch(e){ /* transient decode/backend hiccup — keep going */ }
+    try{ await cycle(); engine.errors=0; adaptSpeed(); }
+    catch(e){
+      // one-off decode hiccups are normal; a persistent fault is not, and
+      // silently looping on it is how a screen ends up doing nothing
+      engine.lastError=e;
+      if(++engine.errors===25){
+        console.error('Facegate: recognition loop failing repeatedly', e);
+        toast('Recognition is failing on this device: '+(e && e.message || e), 6000);
+        setStatus('Engine error','warn');
+      }
+    }
     const spent=performance.now()-t0;
+    engine.cycleMs = engine.cycleMs==null ? spent : engine.cycleMs*0.8 + spent*0.2;
     engine.frames++;
     if(t0-engine.fpsAt>1000){ engine.fps=engine.frames*1000/(t0-engine.fpsAt); engine.frames=0; engine.fpsAt=t0; }
     await sleep(Math.max(0, (1000/TARGET_FPS())-spent));
@@ -1003,6 +1058,10 @@ async function cycle(){
   syncTracks(res, now);
 
   const targets=descriptorTargets(now);
+  if(state.enrolling && !targets.length){
+    state.enrolling.why='No face detected — move into the camera view';
+    updateCap();
+  }
   if(targets.length){
     const t1=performance.now();
     let crops=[];
@@ -1023,6 +1082,14 @@ async function cycle(){
     engine.descMs=performance.now()-t1;
   }
   updateSeen();
+}
+
+/* How long a track survives without a fresh detection. On a slow device a
+   detection cycle can take over a second, and a fixed cut-off blanks the
+   overlay between frames — the boxes and names appear to flicker or vanish
+   entirely. Scale it to the measured cycle time instead. */
+function trackTTL(){
+  return clamp(2.5*(engine.cycleMs||70), 450, 2600);
 }
 
 /* ---- tracking: IoU-greedy association with box smoothing ---- */
@@ -1055,7 +1122,7 @@ function syncTracks(res, now){
     state.tracks.push(t);
   });
   state.tracks.forEach((t,ti)=>{ if(!usedT.has(ti) && t.seenAt!==now) t.det=null; });
-  state.tracks=state.tracks.filter(t=>now-t.seenAt<900);
+  state.tracks=state.tracks.filter(t=>now-t.seenAt<trackTTL()+400);
 }
 function newTrack(r, now){
   const b=r.detection.box;
@@ -1132,11 +1199,11 @@ function measureQuality(crop, det){
   const size=det.detection.box.width;
   const p=poseOf(det.landmarks);
   const q={
-    light, contrast, sharp, size, pose:p,
-    okLight: light>=42 && light<=228 && contrast>=20,
+    light, contrast, sharp, size, pose:p, det:det.detection.score,
+    okLight: light>=42 && light<=228 && contrast>=18,
     okSharp: sharp>=34,
-    okSize:  size>=Math.max(96, ov.width*0.085),
-    okAngle: Math.abs(p.roll)<=26
+    okSize:  size>=Math.max(80, ov.width*0.062),
+    okAngle: Math.abs(p.roll)<=28
   };
   q.score = (q.okLight?0.3:0) + (q.okSharp?0.3:0) + (q.okSize?0.25:0) + (q.okAngle?0.15:0);
   return q;
@@ -1146,6 +1213,12 @@ function centroid(pts){
   for(const p of pts){ x+=p.x; y+=p.y; }
   return {x:x/pts.length, y:y/pts.length};
 }
+/* yaw and pitch are raw head geometry in rough degrees, NOT absolute angles:
+   where a person's nose sits between their eye line and chin varies a lot
+   from face to face (measured 0.34-0.36 of face length on a frontal face,
+   but it is individual). Enrolment calibrates against the person's own
+   neutral pose instead of assuming a constant, so the guided steps work the
+   same for every face. roll is a true angle and needs no calibration. */
 function poseOf(lm){
   try{
     const pts=lm.positions;
@@ -1156,7 +1229,7 @@ function poseOf(lm){
     const roll=Math.atan2(re.y-le.y, re.x-le.x)*180/Math.PI;
     const yaw=((nose.x-eyeMid.x)/eyeDist)*90;
     const faceLen=Math.hypot(chin.x-eyeMid.x, chin.y-eyeMid.y)||1;
-    const pitch=(((nose.y-eyeMid.y)/faceLen)-0.42)*150;
+    const pitch=((nose.y-eyeMid.y)/faceLen)*150;
     return {roll, yaw, pitch};
   }catch(e){ return {roll:0, yaw:0, pitch:0}; }
 }
@@ -1314,8 +1387,9 @@ function draw(){
 
   const shown=[];
 
+  const ttl=trackTTL();
   for(const t of state.tracks){
-    if(now-t.seenAt>420) continue;
+    if(now-t.seenAt>ttl) continue;
     live++;
     let label='…', tone='muted', conf=null;
     if(state.enrolling){
@@ -1387,50 +1461,104 @@ function updateHud(){
   $('hDet').textContent=engine.detMs.toFixed(0);
   $('hDesc').textContent=engine.descMs.toFixed(0);
   $('hFaces').textContent=engine.faces;
-  $('hBack').textContent=engine.backend;
+  $('hBack').textContent=engine.backend+(state.inputSize?' · '+state.inputSize:'');
 }
 
 /* ================= enrolment =================
    Guided, quality-gated capture. Every accepted pose is stored twice: as
    seen and mirrored, which covers the other side of the face for free. */
-const STEP_KINDS=['straight','sideA','sideB','vertA','vertB','smile','closer','straight','sideA','sideB','vertA','straight'];
+/* The first step doubles as calibration: we wait for the person to hold
+   still looking at the camera, record that as their neutral pose, and judge
+   every later step as a movement away from it. Nothing here is allowed to
+   block forever — each step relaxes its requirements the longer it waits. */
+const STEP_KINDS=['neutral','sideA','sideB','vertA','vertB','smile','straight','sideA','sideB','vertA','vertB','straight'];
 const STEP_TEXT={
+  neutral:'Look straight at the camera and hold still',
   straight:'Look straight at the camera',
   sideA:'Turn your head slightly to one side',
   sideB:'Now turn to the other side',
   vertA:'Tip your chin up or down a little',
   vertB:'Now the other way',
-  smile:'Smile, facing the camera',
-  closer:'Move a little closer, facing the camera'
+  smile:'Smile, facing the camera'
 };
 function buildPlan(n){
   const plan=[];
   for(let i=0;i<n;i++) plan.push(STEP_KINDS[i%STEP_KINDS.length]);
+  plan[0]='neutral';
   return plan;
 }
-function stepOk(kind, p, e, size){
-  const ay=Math.abs(p.yaw), ap=Math.abs(p.pitch);
+/* How forgiving to be, based on how long this step has been waiting. Pose
+   requirements ease away entirely, but image quality only ever drops to a
+   floor — a sample too poor to help is worse than no sample, so past that
+   point we ask rather than quietly storing rubbish. */
+function relaxLevel(e, now){
+  const w=now-e.stepAt;
+  if(w>13000) return 3;      // floor reached; offer the manual override
+  if(w>7500)  return 2;      // ignore pose, quality floor applies
+  if(w>4000)  return 1;      // widen the pose bands
+  return 0;
+}
+const GATES=[
+  {lo:42, hi:228, contrast:18, sharp:34, sizeFrac:0.062, sizeMin:80, roll:28, det:0.50},
+  {lo:42, hi:228, contrast:18, sharp:34, sizeFrac:0.062, sizeMin:80, roll:28, det:0.50},
+  {lo:30, hi:240, contrast:12, sharp:20, sizeFrac:0.050, sizeMin:64, roll:34, det:0.35},
+  {lo:30, hi:240, contrast:12, sharp:20, sizeFrac:0.050, sizeMin:64, roll:34, det:0.35}
+];
+function qualityFail(q, lvl){
+  const g=GATES[Math.min(Math.max(lvl,0),3)];
+  if(q.size < Math.max(g.sizeMin, ov.width*g.sizeFrac)) return 'Come closer to the camera';
+  if(q.light < g.lo) return 'Too dark — find more light';
+  if(q.light > g.hi) return 'Too bright';
+  if(q.contrast < g.contrast) return 'Too flat — avoid strong backlight';
+  if(q.sharp < g.sharp) return 'Hold steadier — the image is blurry';
+  if(Math.abs(q.pose.roll) > g.roll) return 'Straighten your head a little';
+  if(q.det < g.det) return 'Face not clearly visible';
+  return '';
+}
+function poseDelta(e, p){
+  return e.cal
+    ? {yaw:p.yaw-e.cal.yaw, pitch:p.pitch-e.cal.pitch}
+    : {yaw:0, pitch:0};
+}
+function stepOk(kind, d, e, lvl){
+  const k = lvl>=1 ? 1.5 : 1;            // widened bands once it has waited
+  const ay=Math.abs(d.yaw), ap=Math.abs(d.pitch);
   switch(kind){
-    case 'straight': case 'smile': return ay<=12 && ap<=15;
-    case 'closer':   return ay<=15 && ap<=18 && size>=e.baseSize*1.18;
-    case 'sideA':    return ay>=13 && ay<=40;
-    case 'sideB':    return ay>=13 && ay<=40 && (!e.sideSign || Math.sign(p.yaw)!==e.sideSign);
-    case 'vertA':    return ap>=10 && ap<=34;
-    case 'vertB':    return ap>=10 && ap<=34 && (!e.vertSign || Math.sign(p.pitch)!==e.vertSign);
+    case 'straight': case 'smile': return ay<=10*k && ap<=12*k;
+    case 'sideA':    return ay>=12/k && ay<=44*k;
+    case 'sideB':    return ay>=12/k && ay<=44*k && (!e.sideSign || Math.sign(d.yaw)!==e.sideSign);
+    case 'vertA':    return ap>=9/k  && ap<=36*k;
+    case 'vertB':    return ap>=9/k  && ap<=36*k && (!e.vertSign || Math.sign(d.pitch)!==e.vertSign);
   }
   return true;
 }
-function stepHint(kind, p, e, size){
-  const ay=Math.abs(p.yaw), ap=Math.abs(p.pitch);
+function stepHint(kind, d, e){
+  const ay=Math.abs(d.yaw), ap=Math.abs(d.pitch);
   switch(kind){
-    case 'straight': case 'smile': return (ay>12||ap>15) ? 'Face the camera squarely' : '';
-    case 'closer':   return size<e.baseSize*1.18 ? 'A little closer' : 'Face the camera squarely';
-    case 'sideA':    return ay<13 ? 'Turn a bit more' : 'Not quite that far';
-    case 'sideB':    return ay<13 ? 'Turn a bit more' : (e.sideSign && Math.sign(p.yaw)===e.sideSign) ? 'The other side this time' : 'Not quite that far';
-    case 'vertA':    return ap<10 ? 'A little more' : 'Not quite that far';
-    case 'vertB':    return ap<10 ? 'A little more' : (e.vertSign && Math.sign(p.pitch)===e.vertSign) ? 'The other way this time' : 'Not quite that far';
+    case 'straight': case 'smile': return 'Face the camera squarely';
+    case 'sideA':    return ay<12 ? 'Turn a bit more' : 'Not quite that far';
+    case 'sideB':    return ay<12 ? 'Turn a bit more'
+                     : (e.sideSign && Math.sign(d.yaw)===e.sideSign) ? 'The other side this time' : 'Not quite that far';
+    case 'vertA':    return ap<9 ? 'A little more' : 'Not quite that far';
+    case 'vertB':    return ap<9 ? 'A little more'
+                     : (e.vertSign && Math.sign(d.pitch)===e.vertSign) ? 'The other way this time' : 'Not quite that far';
   }
   return '';
+}
+/* neutral is accepted once the head stops moving, which also fixes the
+   baseline the later steps are measured against */
+function steadyEnough(e, p, now){
+  e.hold.push({yaw:p.yaw, pitch:p.pitch, t:now});
+  while(e.hold.length && now-e.hold[0].t>900) e.hold.shift();
+  if(e.hold.length<4 || now-e.hold[0].t<450) return null;
+  let ylo=Infinity,yhi=-Infinity,plo=Infinity,phi=-Infinity,ys=0,ps=0;
+  for(const h of e.hold){
+    ylo=Math.min(ylo,h.yaw); yhi=Math.max(yhi,h.yaw);
+    plo=Math.min(plo,h.pitch); phi=Math.max(phi,h.pitch);
+    ys+=h.yaw; ps+=h.pitch;
+  }
+  if(yhi-ylo>7 || phi-plo>7) return null;
+  return {yaw:ys/e.hold.length, pitch:ps/e.hold.length};
 }
 
 $('btnEnrol').addEventListener('click', ()=>startEnrol($('newName').value.trim()));
@@ -1447,7 +1575,8 @@ function startEnrol(name){
   if(dupe && !confirm(`${name} is already enrolled. Add more poses to that profile?`)) return;
   state.enrolling={
     name, need:cfg.shots, got:[], aug:[], plan:buildPlan(cfg.shots),
-    last:0, stepAt:performance.now(), trackId:null, baseSize:0, sideSign:0, vertSign:0, why:''
+    last:0, stepAt:performance.now(), trackId:null, cal:null, hold:[],
+    sideSign:0, vertSign:0, why:'', force:false
   };
   $('cap').classList.remove('hidden');
   $('capwho').textContent='Capturing '+name;
@@ -1456,6 +1585,12 @@ function startEnrol(name){
   updateCap();
   setStatus('Capturing poses','live');
 }
+$('capNow').addEventListener('click', ()=>{
+  if(!state.enrolling) return;
+  state.enrolling.force=true;
+  state.enrolling.why='Capturing this pose…';
+  updateCap();
+});
 $('btnStopEnrol').addEventListener('click', cancelEnrol);
 function cancelEnrol(){
   if(!state.enrolling) return;
@@ -1467,7 +1602,7 @@ function cancelEnrol(){
 function updateCap(){
   const e=state.enrolling; if(!e) return;
   const kind=e.plan[e.got.length]||'straight';
-  $('capcue').textContent=STEP_TEXT[kind]||'Look at the camera';
+  $('capcue').textContent=(STEP_TEXT[kind]||'Look at the camera')+'  ('+(e.got.length+1)+'/'+e.need+')';
   $('capwhy').textContent=e.why||'';
   $('capbars').innerHTML=Array.from({length:e.need},(_,i)=>`<i class="${i<e.got.length?'on':''}"></i>`).join('');
 }
@@ -1487,34 +1622,53 @@ async function mirrorDescriptor(crop){
 async function tryCapture(t, crop, desc, now){
   const e=state.enrolling, q=t.q;
   if(!e || !q) return;
-  if(!e.baseSize) e.baseSize=q.size;
 
   setQ('qLight', q.okLight); setQ('qSharp', q.okSharp);
   setQ('qSize', q.okSize);  setQ('qPose', q.okAngle);
 
   const kind=e.plan[e.got.length]||'straight';
-  const relaxed = now-e.stepAt > 8000;      // never let the user get stuck
-  let why='';
-  if(!q.okSize) why='Come closer to the camera';
-  else if(!q.okLight) why = q.light<42 ? 'Too dark — find more light' : q.contrast<20 ? 'Too flat — avoid strong backlight' : 'Too bright';
-  else if(!q.okSharp) why='Hold steadier — the image is blurry';
-  else if(!q.okAngle) why='Straighten your head a little';
-  else if(t.det.detection.score<0.55) why='Face not clearly visible';
-  else if(!relaxed && !stepOk(kind, q.pose, e, q.size)) why=stepHint(kind, q.pose, e, q.size);
-  e.why=why; updateCap();
+  const lvl=relaxLevel(e, now);
+
+  let why = e.force ? '' : qualityFail(q, lvl);
+  if(!why && !e.force){
+    if(kind==='neutral'){
+      const steady=steadyEnough(e, q.pose, now);
+      if(steady) e.cal=steady;
+      else if(lvl<2) why='Hold still for a moment…';
+    }else if(lvl<2){
+      const d=poseDelta(e, q.pose);
+      if(!stepOk(kind, d, e, lvl)) why=stepHint(kind, d, e);
+    }
+  }
+
+  if(why && lvl>=3) why += ' — or press “Capture this pose now”';
+  e.why = why || (lvl>=2 && !e.force ? 'Taking the next clear frame…' : '');
+  updateCap();
   if(why) return;
-  if(now-e.last<600) return;
+  if(!e.force && now-e.last<600) return;
 
+  // Near-identical samples add nothing, but someone holding very still must
+  // not be blocked forever either, so this eases off with everything else.
+  const dupLimit = e.force ? 0 : lvl>=3 ? 0 : lvl>=2 ? 0.05 : 0.085;
   const arr=Array.from(desc);
-  for(const d of e.got) if(l2(d,arr)<0.085){ e.why='Change the pose a little'; updateCap(); return; }
+  if(dupLimit>0){
+    for(const d of e.got) if(l2(d,arr)<dupLimit){
+      e.why='Change the pose a little'; updateCap(); return;
+    }
+  }
 
-  if(kind==='sideA') e.sideSign=Math.sign(q.pose.yaw)||1;
-  if(kind==='vertA') e.vertSign=Math.sign(q.pose.pitch)||1;
+  // an uncalibrated first capture still anchors the later steps
+  if(!e.cal) e.cal={yaw:q.pose.yaw, pitch:q.pose.pitch};
+  if(kind==='sideA' || kind==='sideB'){
+    const dy=q.pose.yaw-e.cal.yaw;
+    if(kind==='sideA') e.sideSign=Math.sign(dy)||1;
+  }
+  if(kind==='vertA') e.vertSign=Math.sign(q.pose.pitch-e.cal.pitch)||1;
 
   e.got.push(arr);
   const m=await mirrorDescriptor(crop);
   if(m) e.aug.push(Array.from(m));
-  e.last=now; e.stepAt=now; e.why='';
+  e.last=now; e.stepAt=now; e.why=''; e.force=false; e.hold.length=0;
   updateCap();
   if(e.got.length>=e.need) await finishEnrol();
 }
