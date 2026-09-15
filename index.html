@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Facegate — on-device face recognition</title>
+<meta name="description" content="Private, offline-capable face detection and recognition. Nothing leaves the device.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -18,6 +19,7 @@
   --amber:#E8A33D;
   --clay:#D0685F;
   --jade:#5FA88C;
+  --violet:#8E86C9;
   --r:10px;
 }
 *{box-sizing:border-box}
@@ -40,10 +42,12 @@ input,select{
   font:inherit;color:var(--ivory);background:var(--panel-2);
   border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;width:100%;
 }
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 18px,calc(100% - 12px) 18px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
 input::placeholder{color:#5E7683}
 
 /* ---------- shell ---------- */
-.shell{display:grid;grid-template-columns:1fr 340px;height:100dvh}
+.shell{display:grid;grid-template-columns:1fr 352px;height:100dvh}
 .stage{position:relative;background:#060F14;overflow:hidden;display:flex;align-items:center;justify-content:center}
 video,canvas.overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 video{transform:scaleX(-1)}
@@ -65,8 +69,18 @@ canvas.overlay{pointer-events:none}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none;transition:background .25s}
 .dot.live{background:var(--jade);box-shadow:0 0 0 0 rgba(95,168,140,.6);animation:pulse 2.4s ease-out infinite}
 .dot.warn{background:var(--clay)}
+.dot.busy{background:var(--amber)}
 @keyframes pulse{to{box-shadow:0 0 0 9px rgba(95,168,140,0)}}
 @media (prefers-reduced-motion:reduce){.dot.live{animation:none}}
+
+.hud{
+  position:absolute;top:58px;right:20px;z-index:6;display:none;
+  background:rgba(11,23,30,.72);backdrop-filter:blur(8px);border:1px solid var(--line);
+  border-radius:8px;padding:8px 11px;font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums;line-height:1.75;min-width:146px;
+}
+.hud.on{display:block}
+.hud b{color:var(--ivory);font-weight:500;float:right;margin-left:14px}
 
 /* ---------- bottom dock ---------- */
 .dock{
@@ -86,13 +100,21 @@ canvas.overlay{pointer-events:none}
 .dock button.stop{background:var(--clay);color:#210C0A;font-weight:600}
 .dock button[disabled]{opacity:.4;cursor:not-allowed}
 
+.quickadd{
+  position:absolute;left:50%;bottom:78px;transform:translateX(-50%);z-index:7;
+  background:rgba(11,23,30,.86);backdrop-filter:blur(10px);border:1px solid var(--clay);
+  color:var(--ivory);border-radius:999px;padding:9px 17px;font-size:13.5px;display:none;
+}
+.quickadd.on{display:block}
+.quickadd:hover{background:var(--panel-2)}
+
 /* ---------- boot / gate screens ---------- */
 .veil{
   position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
-  background:rgba(6,15,20,.94);padding:24px;
+  background:rgba(6,15,20,.94);padding:24px;overflow-y:auto;
 }
 .veil.hidden{display:none}
-.card{width:100%;max-width:380px}
+.card{width:100%;max-width:400px}
 .card h2{font-family:"Instrument Serif",Georgia,serif;font-weight:400;font-size:26px;margin:0 0 6px}
 .card p{color:var(--muted);font-size:14px;margin:0 0 18px}
 .card label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
@@ -101,33 +123,51 @@ canvas.overlay{pointer-events:none}
   padding:11px;border-radius:var(--r);
 }
 .card .go:hover{background:#F0B155}
-.card .alt{width:100%;margin-top:8px;padding:9px;border-radius:var(--r);color:var(--muted);font-size:13.5px}
-.card .alt:hover{color:var(--ivory)}
+.card .alt{width:100%;margin-top:8px;padding:9px;border-radius:var(--r);color:var(--muted);font-size:13.5px;border:1px solid transparent}
+.card .alt:hover{color:var(--ivory);border-color:var(--line)}
 .err{color:var(--clay);font-size:13px;margin-top:10px;min-height:18px}
+.strength{display:flex;gap:4px;margin-top:8px}
+.strength i{height:3px;flex:1;border-radius:2px;background:var(--line)}
+.strength i.on{background:var(--jade)}
+.strength i.mid{background:var(--amber)}
+.strength i.low{background:var(--clay)}
 
 .loadbar{height:2px;background:var(--panel-2);border-radius:2px;overflow:hidden;margin-top:18px}
 .loadbar i{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+.bootlog{
+  margin-top:14px;max-height:132px;overflow-y:auto;font-size:12px;color:var(--muted);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.7;
+  border:1px solid var(--line);border-radius:8px;padding:9px 11px;display:none;
+}
+.bootlog.on{display:block}
+.bootlog .ok{color:var(--jade)}
+.bootlog .bad{color:var(--clay)}
+.offlinehelp{display:none;margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.6}
+.offlinehelp.on{display:block}
+.offlinehelp code{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11.5px;display:inline-block;margin:2px 0}
 
 /* ---------- rail ---------- */
 .rail{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:1px solid var(--line);flex:none}
-.tabs button{flex:1;padding:14px 8px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button{flex:1;padding:14px 6px;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent}
 .tabs button[aria-selected="true"]{color:var(--ivory);border-bottom-color:var(--amber)}
 .pane{display:none;overflow-y:auto;padding:18px;flex:1;min-height:0}
 .pane.on{display:block}
 
 .roster{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .person{
-  display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;
+  display:grid;grid-template-columns:1fr auto auto;gap:4px 8px;align-items:center;
   padding:11px 12px;border-radius:var(--r);border:1px solid transparent;
 }
 .person.seen{border-color:var(--amber);background:rgba(232,163,61,.09)}
-.person .nm{font-weight:500}
-.person .meta{grid-column:1;color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:7px}
+.person .nm{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person .meta{grid-column:1/-1;color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .ticks{display:flex;gap:2px}
 .ticks i{width:3px;height:9px;border-radius:1px;background:var(--line)}
 .ticks i.on{background:var(--jade)}
-.person .del{grid-row:1/3;color:var(--muted);font-size:18px;padding:0 6px;line-height:1}
+.ticks i.mid{background:var(--amber)}
+.person .ic{grid-row:1;color:var(--muted);font-size:15px;padding:0 5px;line-height:1}
+.person .ic:hover{color:var(--ivory)}
 .person .del:hover{color:var(--clay)}
 
 .empty{color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:var(--r);padding:22px 18px}
@@ -144,28 +184,43 @@ canvas.overlay{pointer-events:none}
 .row button:hover{border-color:var(--muted)}
 .slider{display:flex;align-items:center;gap:10px}
 .slider input[type=range]{padding:0;border:none;background:none;accent-color:var(--amber)}
-.slider output{font-variant-numeric:tabular-nums;font-size:13.5px;min-width:34px;text-align:right}
+.slider output{font-variant-numeric:tabular-nums;font-size:13.5px;min-width:38px;text-align:right}
 hr{border:none;border-top:1px solid var(--line);margin:20px 0}
 .note{font-size:12.5px;color:var(--muted);line-height:1.55}
 .note strong{color:var(--ivory);font-weight:500}
+.sect{font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+label.check{display:flex;align-items:flex-start;gap:9px;font-size:14px;color:var(--ivory);cursor:pointer;margin-bottom:0}
+label.check input{width:auto;flex:none;margin:3px 0 0;accent-color:var(--amber)}
+label.check .hint{display:block}
+
+.pill{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.pill.good{color:var(--jade);border-color:rgba(95,168,140,.5)}
+.pill.warn{color:var(--amber);border-color:rgba(232,163,61,.5)}
+.pill.bad{color:var(--clay);border-color:rgba(208,104,95,.5)}
 
 /* ---------- enrol overlay ---------- */
 .capture{
   position:absolute;left:50%;bottom:92px;transform:translateX(-50%);z-index:7;
-  background:rgba(11,23,30,.86);backdrop-filter:blur(10px);border:1px solid var(--jade);
-  border-radius:var(--r);padding:13px 18px;text-align:center;min-width:250px;
+  background:rgba(11,23,30,.88);backdrop-filter:blur(10px);border:1px solid var(--jade);
+  border-radius:var(--r);padding:13px 18px;text-align:center;min-width:290px;max-width:calc(100% - 32px);
 }
 .capture.hidden{display:none}
 .capture .who{font-weight:500;margin-bottom:3px}
-.capture .cue{color:var(--jade);font-size:13.5px}
-.capture .bars{display:flex;gap:4px;justify-content:center;margin-top:9px}
-.capture .bars i{width:26px;height:3px;border-radius:2px;background:var(--line)}
+.capture .cue{color:var(--jade);font-size:14px}
+.capture .why{color:var(--muted);font-size:12.5px;margin-top:5px;min-height:18px}
+.capture .bars{display:flex;gap:4px;justify-content:center;margin-top:9px;flex-wrap:wrap}
+.capture .bars i{width:22px;height:3px;border-radius:2px;background:var(--line)}
 .capture .bars i.on{background:var(--jade)}
+.qmeter{display:flex;gap:10px;justify-content:center;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.qmeter span{display:flex;align-items:center;gap:4px}
+.qmeter b{width:7px;height:7px;border-radius:50%;background:var(--clay);display:inline-block}
+.qmeter b.ok{background:var(--jade)}
 
 .toast{
   position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:9;
   background:var(--panel-2);border:1px solid var(--line);border-radius:999px;
-  padding:9px 18px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .25s
+  padding:9px 18px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .25s;
+  max-width:calc(100% - 40px);text-align:center;
 }
 .toast.on{opacity:1}
 
@@ -176,6 +231,7 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
   .brand span{display:none}
   .dock{bottom:14px;overflow-x:auto}
   .capture{bottom:76px}
+  .hud{display:none !important}
 }
 </style>
 </head>
@@ -189,11 +245,28 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
     <div class="brand"><h1>Facegate</h1><span>nothing leaves this device</span></div>
     <div class="status"><span class="dot" id="sdot"></span><span id="stxt">Locked</span></div>
 
+    <div class="hud" id="hud">
+      <div>detect <b id="hFps">—</b></div>
+      <div>detect ms <b id="hDet">—</b></div>
+      <div>match ms <b id="hDesc">—</b></div>
+      <div>faces <b id="hFaces">0</b></div>
+      <div>backend <b id="hBack">—</b></div>
+    </div>
+
     <div class="capture hidden" id="cap">
       <div class="who" id="capwho"></div>
       <div class="cue" id="capcue"></div>
+      <div class="why" id="capwhy"></div>
+      <div class="qmeter">
+        <span><b id="qLight"></b>light</span>
+        <span><b id="qSharp"></b>sharp</span>
+        <span><b id="qSize"></b>distance</span>
+        <span><b id="qPose"></b>pose</span>
+      </div>
       <div class="bars" id="capbars"></div>
     </div>
+
+    <button class="quickadd" id="quickAdd">Unknown face — add to roster</button>
 
     <div class="dock">
       <button id="btnCam" class="primary">Start camera</button>
@@ -210,6 +283,7 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
         <p id="gSub">Your passphrase decrypts the vault. It is never stored and never sent anywhere — lose it and the data is gone for good.</p>
         <label for="pass1">Passphrase</label>
         <input type="password" id="pass1" autocomplete="current-password" placeholder="At least 8 characters">
+        <div class="strength" id="strength" style="display:none"><i></i><i></i><i></i><i></i></div>
         <div id="confirmWrap" style="display:none">
           <label for="pass2">Confirm passphrase</label>
           <input type="password" id="pass2" autocomplete="new-password">
@@ -223,11 +297,25 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
     <!-- model loader -->
     <div class="veil hidden" id="boot">
       <div class="card">
-        <h2>Loading the recognition models</h2>
-        <p id="bootMsg">About 6 MB, fetched once and cached by your browser. After this, the app works with no internet at all.</p>
+        <h2 id="bootTitle">Loading the recognition models</h2>
+        <p id="bootMsg">About 7 MB, fetched once and stored inside this vault’s database. After that the app runs with no internet at all.</p>
         <div class="loadbar"><i id="bootBar"></i></div>
+        <div class="bootlog" id="bootLog"></div>
         <div class="err" id="bootErr"></div>
-        <button class="alt" id="bootRetry" style="display:none">Try again</button>
+        <div class="offlinehelp" id="offlineHelp">
+          To run fully offline, download the face-api.js weights and pick the folder below — they are stored in this browser and reused forever. Needed files:
+          <code>tiny_face_detector_model-weights_manifest.json</code>
+          <code>tiny_face_detector_model-shard1</code>
+          <code>face_landmark_68_model-weights_manifest.json</code>
+          <code>face_landmark_68_model-shard1</code>
+          <code>face_recognition_model-weights_manifest.json</code>
+          <code>face_recognition_model-shard1</code>
+          <code>face_recognition_model-shard2</code>
+          Or drop the same folder next to this file and name it <code>models</code>.
+        </div>
+        <button class="go" id="bootRetry" style="display:none">Try again</button>
+        <button class="alt" id="bootFolder">Load models from a folder…</button>
+        <input type="file" id="modelFiles" multiple webkitdirectory directory style="display:none">
       </div>
     </div>
   </div>
@@ -254,43 +342,99 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
         <div class="hint">Get their permission first. Face data is sensitive personal information under the Data Privacy Act.</div>
       </div>
       <div class="field">
-        <label for="shots">Samples to capture</label>
+        <label for="shots">Poses to capture</label>
         <div class="slider">
           <input type="range" id="shots" min="4" max="12" step="1" value="7">
           <output id="shotsOut">7</output>
         </div>
-        <div class="hint">More samples across different angles, lighting and expressions means better recognition later. Seven is a good start.</div>
+        <div class="hint">Each pose is guided and quality-checked, then stored twice — once as seen and once mirrored — so the profile covers both sides of the face. Seven poses is a good start; ten is noticeably stronger.</div>
       </div>
       <button class="go" id="btnEnrol" style="width:100%;background:var(--jade);color:#08140F;font-weight:600;padding:11px;border-radius:var(--r)">Capture face</button>
       <hr>
-      <p class="note"><strong>How it stays accurate over time.</strong> Each capture becomes a 128-number descriptor — a mathematical fingerprint, not a photo. When someone is recognised with high confidence, Facegate quietly saves that fresh descriptor too, so the profile keeps up as hair, weight, glasses and age change.</p>
+      <p class="note"><strong>Why the guidance matters.</strong> Facegate refuses blurry, backlit, too-small or badly-angled samples instead of quietly storing them. A bad sample is worse than no sample: it is the usual reason a system starts calling one person by another person’s name.</p>
+      <hr>
+      <p class="note"><strong>How it stays accurate over time.</strong> Each capture becomes a 128-number descriptor — a mathematical fingerprint, not a photo. When someone is recognised with very high confidence and good image quality, Facegate quietly keeps that fresh descriptor too, so the profile follows hair, weight, glasses and age as they change.</p>
     </section>
 
     <section class="pane" id="paneSet" role="tabpanel">
+      <p class="sect">Recognition</p>
+      <div class="field">
+        <label for="mode">Accuracy mode</label>
+        <select id="mode">
+          <option value="fast">Fast — lightest, for older phones</option>
+          <option value="balanced">Balanced — recommended</option>
+          <option value="best">Best — most accurate, extra 5 MB download</option>
+        </select>
+        <div class="hint" id="modeHint"></div>
+      </div>
       <div class="field">
         <label for="thresh">Match strictness</label>
         <div class="slider">
-          <input type="range" id="thresh" min="0.34" max="0.62" step="0.01" value="0.48">
-          <output id="threshOut">0.48</output>
+          <input type="range" id="thresh" min="0.32" max="0.62" step="0.01" value="0.46">
+          <output id="threshOut">0.46</output>
         </div>
         <div class="hint">Lower is stricter: fewer wrong names, more “Unknown”. Higher recognises more easily but starts confusing lookalikes. Move it down if you ever see a wrong name.</div>
       </div>
       <div class="field">
-        <label for="frames">Frames needed to confirm a name</label>
+        <label for="margin">Lookalike guard</label>
+        <div class="slider">
+          <input type="range" id="margin" min="0" max="0.16" step="0.01" value="0.05">
+          <output id="marginOut">0.05</output>
+        </div>
+        <div class="hint">A name is only used if it beats the runner-up by this much. This is what stops siblings and lookalikes from swapping names. Set to 0 to disable.</div>
+      </div>
+      <div class="field">
+        <label for="frames">Confirmations needed</label>
         <div class="slider">
           <input type="range" id="frames" min="1" max="8" step="1" value="3">
           <output id="framesOut">3</output>
         </div>
-        <div class="hint">A name only appears after it matches this many frames in a row. Cuts flicker and momentary mistakes.</div>
+        <div class="hint">A name only appears after this many consecutive agreeing matches. Cuts flicker and momentary mistakes.</div>
       </div>
       <div class="field">
-        <label><input type="checkbox" id="adapt" checked style="width:auto;margin-right:8px">Keep learning faces over time</label>
-        <div class="hint">Adds new descriptors when confidence is very high, capped at 30 per person.</div>
+        <label class="check"><input type="checkbox" id="liveness"><span>Require a blink before naming someone<span class="hint" style="margin-top:2px">A held-up photo or a screen does not blink. This is a speed bump, not real anti-spoofing — a video replay still passes.</span></span></label>
       </div>
       <div class="field">
-        <label><input type="checkbox" id="mirror" checked style="width:auto;margin-right:8px">Mirror the preview</label>
+        <label class="check"><input type="checkbox" id="adapt" checked><span>Keep learning faces over time<span class="hint" style="margin-top:2px">Adds new descriptors when confidence and image quality are both very high, keeping the most varied 40 per person.</span></span></label>
       </div>
+
       <hr>
+      <p class="sect">Camera &amp; display</p>
+      <div class="field">
+        <label for="res">Capture resolution</label>
+        <select id="res">
+          <option value="640">640 × 480 — fastest</option>
+          <option value="1280">1280 × 720 — recommended</option>
+          <option value="1920">1920 × 1080 — most detail at distance</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="camsel">Camera</label>
+        <select id="camsel"><option value="">Default camera</option></select>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" id="mirror" checked><span>Mirror the preview</span></label>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" id="showMarks"><span>Show facial landmarks</span></label>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" id="showHud"><span>Show performance readout</span></label>
+      </div>
+
+      <hr>
+      <p class="sect">Models</p>
+      <div class="field">
+        <div class="hint" id="modelState">Not loaded yet.</div>
+        <div class="row" style="margin-top:8px">
+          <button id="btnModelFolder">Load from folder</button>
+          <button id="btnModelClear">Clear cache</button>
+        </div>
+        <div class="hint">Weights are cached in this browser so the app keeps working with no internet. Clearing makes the next start re-download them.</div>
+      </div>
+
+      <hr>
+      <p class="sect">Vault</p>
       <div class="field">
         <label>Encrypted backup</label>
         <div class="row">
@@ -307,58 +451,97 @@ hr{border:none;border-top:1px solid var(--line);margin:20px 0}
         </div>
       </div>
       <hr>
-      <p class="note"><strong>What honest accuracy looks like.</strong> No face recognition system is 100% correct — not this one, not the ones on phones. Expect roughly 95–99% on a small roster in decent light. It gets worse with harsh backlight, heavy motion blur, masks, or identical twins. Treat a match as strong evidence, never as proof.</p>
+      <p class="note"><strong>What honest accuracy looks like.</strong> No face recognition system is 100% correct — not this one, not the ones on phones. On a small roster in decent light, expect roughly 97–99% with the lookalike guard on. It gets worse with harsh backlight, heavy motion blur, masks, faces far from the camera, and identical twins. Treat a match as strong evidence, never as proof.</p>
       <hr>
-      <p class="note"><strong>Where your data lives.</strong> Descriptors are encrypted with AES-256-GCM using a key stretched from your passphrase (PBKDF2, 250,000 rounds) and stored only in this browser. There is no account, no server, no upload. Someone who steals the device still faces the encryption — but keep the passphrase strong, because that is the whole lock.</p>
+      <p class="note"><strong>Where your data lives.</strong> Descriptors are encrypted with AES-256-GCM using a key stretched from your passphrase (PBKDF2-SHA256, 310,000 rounds) and stored only in this browser. There is no account, no server, no upload. Someone who steals the device still faces the encryption — but keep the passphrase strong, because that is the whole lock.</p>
     </section>
   </aside>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js" defer></script>
-<script defer>
+<script>
 window.addEventListener('DOMContentLoaded', () => {
+'use strict';
 
 const $ = id => document.getElementById(id);
 const vid=$('vid'), ov=$('ov'), ctx=ov.getContext('2d');
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-const MODEL_SOURCES = [
-  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
-  'https://raw.githack.com/justadudewhohacks/face-api.js/master/weights',
-  './models'
-];
+/* ================= config ================= */
+const DEFAULTS={
+  mode:'balanced', thresh:0.46, margin:0.05, frames:3,
+  adapt:true, liveness:false, mirror:true, shots:7,
+  res:1280, showMarks:false, showHud:false, camId:''
+};
+const cfg=Object.assign({}, DEFAULTS);
+try{ Object.assign(cfg, JSON.parse(localStorage.getItem('fg.cfg')||'{}')); }catch(e){}
+function saveCfg(){
+  const out={}; for(const k of Object.keys(DEFAULTS)) out[k]=cfg[k];
+  try{ localStorage.setItem('fg.cfg', JSON.stringify(out)); }catch(e){}
+}
 
-const state = {
-  key:null, salt:null, people:[], // {id,name,descriptors:[[128]],created,lastLearn}
-  running:false, enrolling:null, stream:null, facing:'user',
-  tracks:new Map(), seen:new Set(), modelsReady:false
+const state={
+  key:null, people:[], running:false, stream:null,
+  facing:'user', enrolling:null, modelsReady:false,
+  tracks:[], seen:new Set(), nextTrack:1, goodSource:null, libSource:null
 };
 
-const cfg = {
-  thresh:0.48, frames:3, adapt:true, mirror:true, shots:7,
-  load(){ try{ Object.assign(cfg, JSON.parse(localStorage.getItem('fg.cfg')||'{}')); }catch(e){} },
-  save(){ localStorage.setItem('fg.cfg', JSON.stringify({thresh:cfg.thresh,frames:cfg.frames,adapt:cfg.adapt,mirror:cfg.mirror,shots:cfg.shots})); }
-};
-cfg.load();
+const engine={ detMs:0, descMs:0, fps:0, frames:0, fpsAt:0, backend:'—', faces:0 };
 
 /* ================= storage ================= */
-const DB='facegate', STORE='vault';
+const DB='facegate', STORE='vault', WSTORE='weights';
+let dbp=null;
 function db(){
+  if(dbp) return dbp;
+  dbp=new Promise((res,rej)=>{
+    const r=indexedDB.open(DB,2);
+    r.onupgradeneeded=()=>{
+      const d=r.result;
+      if(!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE);
+      if(!d.objectStoreNames.contains(WSTORE)) d.createObjectStore(WSTORE);
+    };
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  return dbp;
+}
+async function idbGet(store,k){
+  const d=await db();
   return new Promise((res,rej)=>{
-    const r=indexedDB.open(DB,1);
-    r.onupgradeneeded=()=>r.result.createObjectStore(STORE);
-    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+    const t=d.transaction(store,'readonly'); const q=t.objectStore(store).get(k);
+    q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);
   });
 }
-async function put(k,v){ const d=await db(); return new Promise((res,rej)=>{const t=d.transaction(STORE,'readwrite');t.objectStore(STORE).put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);}); }
-async function get(k){ const d=await db(); return new Promise((res,rej)=>{const t=d.transaction(STORE,'readonly');const q=t.objectStore(STORE).get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);}); }
-async function wipeDB(){ const d=await db(); return new Promise((res,rej)=>{const t=d.transaction(STORE,'readwrite');t.objectStore(STORE).clear();t.oncomplete=res;t.onerror=()=>rej(t.error);}); }
+async function idbPut(store,k,v){
+  const d=await db();
+  return new Promise((res,rej)=>{
+    const t=d.transaction(store,'readwrite'); t.objectStore(store).put(v,k);
+    t.oncomplete=()=>res(); t.onerror=()=>rej(t.error);
+  });
+}
+async function idbKeys(store){
+  const d=await db();
+  return new Promise((res,rej)=>{
+    const t=d.transaction(store,'readonly'); const q=t.objectStore(store).getAllKeys();
+    q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error);
+  });
+}
+async function idbClear(store){
+  const d=await db();
+  return new Promise((res,rej)=>{
+    const t=d.transaction(store,'readwrite'); t.objectStore(store).clear();
+    t.oncomplete=()=>res(); t.onerror=()=>rej(t.error);
+  });
+}
+const get=k=>idbGet(STORE,k), put=(k,v)=>idbPut(STORE,k,v);
 
 /* ================= crypto ================= */
 const enc=new TextEncoder(), dec=new TextDecoder();
-async function deriveKey(pass, salt){
+const KDF_ITERS=310000, KDF_LEGACY=250000;
+async function deriveKey(pass, salt, iters){
   const base=await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt, iterations:250000, hash:'SHA-256'},
+    {name:'PBKDF2', salt, iterations:iters||KDF_ITERS, hash:'SHA-256'},
     base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
 }
 async function seal(key, obj){
@@ -370,23 +553,44 @@ async function open_(key, blob){
   const ct=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(blob.iv)}, key, new Uint8Array(blob.ct));
   return JSON.parse(dec.decode(ct));
 }
+function strip(people){
+  return people.map(p=>({id:p.id, name:p.name, descriptors:p.descriptors, created:p.created, lastLearn:p.lastLearn, lastSeen:p.lastSeen}));
+}
 async function savePeople(){
-  await put('people', await seal(state.key, state.people));
+  if(!state.key) return;
+  await put('people', await seal(state.key, strip(state.people)));
 }
 
 /* ================= gate ================= */
 const gate=$('gate');
+let creating=false;
 (async function initGate(){
-  const salt=await get('salt');
+  let salt=null;
+  try{ salt=await get('salt'); }
+  catch(e){ $('gErr').textContent='This browser blocked local storage, so the vault cannot open. Private/incognito windows often do this.'; }
   if(!salt){
+    creating=true;
     $('gTitle').textContent='Create your face vault';
     $('gSub').textContent='Pick a passphrase. It encrypts everything on this device and is never stored or sent anywhere — if you lose it, the data is unrecoverable.';
     $('confirmWrap').style.display='block';
+    $('strength').style.display='flex';
     $('gGo').textContent='Create vault';
     $('gReset').style.display='none';
-    $('pass1').placeholder='At least 8 characters';
   }
+  $('pass1').focus();
 })();
+
+$('pass1').addEventListener('input', ()=>{
+  if(!creating) return;
+  const v=$('pass1').value;
+  let s=0;
+  if(v.length>=8) s++;
+  if(v.length>=12) s++;
+  if(/[^A-Za-z0-9]/.test(v) || (/[A-Z]/.test(v)&&/[0-9]/.test(v))) s++;
+  if(v.length>=16) s++;
+  const cls=s<=1?'low':s<=2?'mid':'on';
+  [...$('strength').children].forEach((el,i)=>{ el.className = i<s ? cls : ''; });
+});
 
 $('gGo').addEventListener('click', unlock);
 $('pass1').addEventListener('keydown', e=>{ if(e.key==='Enter') unlock(); });
@@ -394,87 +598,343 @@ $('pass2').addEventListener('keydown', e=>{ if(e.key==='Enter') unlock(); });
 
 async function unlock(){
   const err=$('gErr'); err.textContent='';
-  const p1=$('pass1').value, creating=$('confirmWrap').style.display!=='none';
+  const p1=$('pass1').value;
   if(p1.length<8){ err.textContent='Passphrase needs at least 8 characters.'; return; }
   if(creating && p1!==$('pass2').value){ err.textContent='The two passphrases do not match.'; return; }
   $('gGo').disabled=true; $('gGo').textContent='Working…';
   try{
     let salt=await get('salt');
-    if(!salt){ salt=crypto.getRandomValues(new Uint8Array(16)); await put('salt', [...salt]); }
-    else salt=new Uint8Array(salt);
-    const key=await deriveKey(p1, salt);
+    let iters=KDF_ITERS;
+    if(!salt){
+      salt=crypto.getRandomValues(new Uint8Array(16));
+      await put('salt', [...salt]);
+      await put('kdf', {iters:KDF_ITERS});
+    }else{
+      salt=new Uint8Array(salt);
+      const k=await get('kdf');
+      iters=(k && k.iters) || KDF_LEGACY;
+    }
+    const key=await deriveKey(p1, salt, iters);
     const stored=await get('people');
     if(stored){
       try{ state.people=await open_(key, stored); }
-      catch(e){ err.textContent='That passphrase does not open this vault.'; $('gGo').disabled=false; $('gGo').textContent='Unlock'; return; }
+      catch(e){
+        err.textContent='That passphrase does not open this vault.';
+        $('gGo').disabled=false; $('gGo').textContent=creating?'Create vault':'Unlock'; return;
+      }
     }else{
-      state.people=[]; await put('people', await seal(key, []));
+      state.people=[];
+      await put('people', await seal(key, []));
     }
     state.key=key;
+    state.people.forEach(p=>{ p.descriptors=(p.descriptors||[]).map(d=>Array.from(d)); p._cen=null; });
+    $('pass1').value=''; $('pass2').value='';
     gate.classList.add('hidden');
     renderRoster();
-    loadModels();
+    bootModels();
   }catch(e){
-    err.textContent='Could not unlock: '+e.message;
+    err.textContent='Could not unlock: '+(e.message||e);
   }
   $('gGo').disabled=false; $('gGo').textContent=creating?'Create vault':'Unlock';
 }
 
 $('gReset').addEventListener('click', async ()=>{
   if(!confirm('Erase the vault and every enrolled face on this device? This cannot be undone.')) return;
-  await wipeDB(); location.reload();
+  await idbClear(STORE); location.reload();
 });
 
-/* ================= models ================= */
-async function loadModels(){
-  const boot=$('boot'), bar=$('bootBar'), berr=$('bootErr');
-  boot.classList.remove('hidden'); berr.textContent=''; $('bootRetry').style.display='none';
-  for(const src of MODEL_SOURCES){
-    try{
-      bar.style.width='12%';
-      await faceapi.nets.tinyFaceDetector.loadFromUri(src);       bar.style.width='38%';
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(src);  bar.style.width='58%';
-      await faceapi.nets.faceRecognitionNet.loadFromUri(src);     bar.style.width='100%';
-      state.modelsReady=true;
-      setTimeout(()=>boot.classList.add('hidden'), 260);
-      setStatus('Ready — start the camera', '');
-      return;
-    }catch(e){ /* try next mirror */ }
-  }
-  berr.textContent='Could not download the models. Check your connection, or place the face-api weights in a “models” folder beside this file to run fully offline.';
-  $('bootRetry').style.display='block';
+/* ================= library loader =================
+   The face-api.js bundle itself is a single point of failure if one CDN is
+   blocked, so try a local copy first and then several independent hosts. */
+const LIB_SRCS=[
+  './vendor/face-api.min.js',
+  './face-api.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js',
+  'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+  'https://fastly.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+  'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js',
+  'https://cdn.statically.io/gh/justadudewhohacks/face-api.js/master/dist/face-api.min.js'
+];
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src=src; s.async=true;
+    s.onload=()=>res(src);
+    s.onerror=()=>{ s.remove(); rej(new Error('could not load')); };
+    document.head.appendChild(s);
+  });
 }
-$('bootRetry').addEventListener('click', loadModels);
+async function ensureLib(){
+  if(window.faceapi) return;
+  for(const src of LIB_SRCS){
+    try{
+      await loadScript(src);
+      if(window.faceapi){ state.libSource=src; bootLog(short(src)+' — library ready','ok'); return; }
+    }catch(e){ bootLog(short(src)+' — unreachable','bad'); }
+  }
+  throw new Error('LIB');
+}
+
+/* ================= model weights =================
+   Every weight file is cached in IndexedDB the first time it arrives, and
+   served from there afterwards. Once the models have loaded a single time,
+   this app never needs the network again — including after a cache purge,
+   because IndexedDB is not the HTTP cache. */
+const MODEL_RE=/^(tiny_face_detector|ssd_mobilenetv1|face_landmark_68_tiny|face_landmark_68|face_recognition|face_expression)_model(-weights_manifest\.json|-shard\d+)$/;
+const MODEL_SOURCES=[
+  './models',
+  './weights',
+  'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
+  'https://fastly.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
+  'https://gcore.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights',
+  'https://cdn.statically.io/gh/justadudewhohacks/face-api.js/master/weights',
+  'https://rawcdn.githack.com/justadudewhohacks/face-api.js/master/weights',
+  'https://raw.githack.com/justadudewhohacks/face-api.js/master/weights',
+  'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights',
+  'https://justadudewhohacks.github.io/face-api.js/weights'
+];
+function baseName(u){
+  try{ return String(u).split('?')[0].split('#')[0].split('/').pop(); }catch(e){ return ''; }
+}
+function short(u){
+  try{ return u.startsWith('.') ? u : new URL(u).host; }catch(e){ return String(u); }
+}
+let bytesIn=0;
+function cachingFetch(rawFetch){
+  return async (input, init)=>{
+    const url = typeof input==='string' ? input : (input && input.url) || '';
+    const name = baseName(url);
+    if(MODEL_RE.test(name)){
+      let hit=null;
+      try{ hit=await idbGet(WSTORE, name); }catch(e){}
+      if(hit){
+        return new Response(hit, {status:200, headers:{
+          'Content-Type': name.endsWith('.json') ? 'application/json' : 'application/octet-stream'
+        }});
+      }
+      const res=await rawFetch(input, init);
+      if(res && res.ok){
+        try{
+          const buf=await res.clone().arrayBuffer();
+          bytesIn+=buf.byteLength;
+          idbPut(WSTORE, name, buf).catch(()=>{});
+        }catch(e){}
+      }
+      return res;
+    }
+    return rawFetch(input, init);
+  };
+}
+
+const NETS={
+  tiny:   {get:()=>faceapi.nets.tinyFaceDetector,      name:'face detector',       weight:0.19},
+  lm:     {get:()=>faceapi.nets.faceLandmark68Net,     name:'landmarks',           weight:0.36},
+  lmTiny: {get:()=>faceapi.nets.faceLandmark68TinyNet, name:'landmarks (light)',   weight:0.08},
+  rec:    {get:()=>faceapi.nets.faceRecognitionNet,    name:'face recognition',    weight:6.2},
+  ssd:    {get:()=>faceapi.nets.ssdMobilenetv1,        name:'precision detector',  weight:5.4}
+};
+function netsFor(mode){
+  if(mode==='fast')  return ['tiny','lmTiny','rec'];
+  if(mode==='best')  return ['ssd','tiny','lm','rec'];
+  return ['tiny','lm','rec'];
+}
+function sourceOrder(){
+  const s=MODEL_SOURCES.slice();
+  if(state.goodSource){
+    const i=s.indexOf(state.goodSource);
+    if(i>0) s.splice(i,1), s.unshift(state.goodSource);
+  }
+  return s;
+}
+async function loadNet(key, onProgress){
+  const spec=NETS[key], net=spec.get();
+  if(net.isLoaded) return;
+  const failures=[];
+  for(const src of sourceOrder()){
+    try{
+      await net.loadFromUri(src);
+      state.goodSource=src;
+      bootLog(spec.name+' ← '+short(src),'ok');
+      onProgress && onProgress();
+      return;
+    }catch(e){
+      failures.push(short(src));
+      if(!net.isLoaded) continue;
+    }
+  }
+  const err=new Error('Could not fetch the '+spec.name+' weights');
+  err.tried=failures;
+  throw err;
+}
+
+function bootLog(msg, cls){
+  const el=$('bootLog'); if(!el) return;
+  el.classList.add('on');
+  const line=document.createElement('div');
+  if(cls) line.className=cls;
+  line.textContent=(cls==='ok'?'✓ ':cls==='bad'?'✗ ':'· ')+msg;
+  el.appendChild(line); el.scrollTop=el.scrollHeight;
+}
+
+async function bootModels(){
+  const boot=$('boot'), bar=$('bootBar'), berr=$('bootErr');
+  boot.classList.remove('hidden');
+  berr.textContent=''; $('bootRetry').style.display='none';
+  $('offlineHelp').classList.remove('on');
+  $('bootLog').innerHTML=''; $('bootLog').classList.remove('on');
+  setStatus('Loading models','busy');
+
+  const keys=netsFor(cfg.mode);
+  const total=keys.reduce((s,k)=>s+NETS[k].weight,0);
+  let done=0;
+  const step=k=>{ done+=NETS[k].weight; bar.style.width=Math.round(100*done/total)+'%'; };
+
+  try{
+    bar.style.width='4%';
+    await ensureLib();
+    try{ faceapi.env.monkeyPatch({ fetch: cachingFetch(window.fetch.bind(window)) }); }catch(e){}
+    try{
+      if(faceapi.tf && faceapi.tf.setBackend){
+        await faceapi.tf.setBackend('webgl').catch(()=>faceapi.tf.setBackend('cpu'));
+        await faceapi.tf.ready();
+        engine.backend=faceapi.tf.getBackend ? faceapi.tf.getBackend() : '—';
+      }
+    }catch(e){ engine.backend='cpu'; }
+
+    // The detector and the recognition net are the two that cannot be
+    // substituted; everything else degrades to a working alternative rather
+    // than leaving the user staring at an error.
+    bootLog('fetching '+NETS.tiny.name);
+    await loadNet('tiny', ()=>step('tiny'));
+    bootLog('fetching '+NETS.rec.name);
+    await loadNet('rec', ()=>step('rec'));
+
+    const prefer = cfg.mode==='fast' ? ['lmTiny','lm'] : ['lm','lmTiny'];
+    let lmErr=null, lmOk=false;
+    for(const k of prefer){
+      try{ bootLog('fetching '+NETS[k].name); await loadNet(k, ()=>step(k)); lmOk=true; break; }
+      catch(e){ lmErr=e; }
+    }
+    if(!lmOk) throw lmErr || new Error('Could not fetch the landmark weights');
+
+    if(cfg.mode==='best'){
+      try{ bootLog('fetching '+NETS.ssd.name); await loadNet('ssd', ()=>step('ssd')); }
+      catch(e){
+        cfg.mode='balanced'; saveCfg();
+        $('mode').value='balanced'; $('modeHint').textContent=MODE_HINTS.balanced;
+        bootLog('precision detector unreachable — continuing in Balanced','bad');
+        toast('Could not fetch the precision detector — running in Balanced mode', 4600);
+      }
+    }
+    bar.style.width='100%';
+    state.modelsReady=true;
+    refreshModelState();
+    setTimeout(()=>boot.classList.add('hidden'), 260);
+    setStatus('Ready — start the camera','');
+    if(bytesIn>0) toast('Models cached — Facegate now works offline');
+  }catch(e){
+    state.modelsReady=false;
+    if(e.message==='LIB'){
+      berr.textContent='Could not load the face-api.js library from any host. Your network or an extension is blocking it. Save face-api.min.js next to this file and reload to run offline.';
+    }else{
+      berr.textContent=(e.message||'Could not download the models')+'. Tried: '+((e.tried||[]).join(', ')||'no sources')+'.';
+    }
+    $('bootRetry').style.display='block';
+    $('offlineHelp').classList.add('on');
+    setStatus('Models unavailable','warn');
+  }
+}
+$('bootRetry').addEventListener('click', bootModels);
+
+/* ---- load weights from a local folder (true offline path) ---- */
+$('bootFolder').addEventListener('click', ()=>$('modelFiles').click());
+$('btnModelFolder').addEventListener('click', ()=>$('modelFiles').click());
+$('modelFiles').addEventListener('change', async ev=>{
+  const files=[...(ev.target.files||[])];
+  ev.target.value='';
+  if(!files.length) return;
+  let saved=0, skipped=0;
+  for(const f of files){
+    const n=baseName(f.name);
+    if(!MODEL_RE.test(n)){ skipped++; continue; }
+    try{ await idbPut(WSTORE, n, await f.arrayBuffer()); saved++; }catch(e){}
+  }
+  if(!saved){
+    toast('No face-api weight files in that folder — look for files named like tiny_face_detector_model-shard1', 5200);
+    return;
+  }
+  toast(saved+' weight files stored'+(skipped?' ('+skipped+' other files ignored)':''), 3600);
+  refreshModelState();
+  if(!state.modelsReady) bootModels();
+});
+$('btnModelClear').addEventListener('click', async ()=>{
+  if(!confirm('Clear the cached model weights? They will be downloaded again next time.')) return;
+  await idbClear(WSTORE);
+  refreshModelState();
+  toast('Model cache cleared');
+});
+async function refreshModelState(){
+  let keys=[];
+  try{ keys=await idbKeys(WSTORE); }catch(e){}
+  const el=$('modelState'); if(!el) return;
+  el.innerHTML = state.modelsReady
+    ? 'Loaded and running'+(state.libSource?' · library from '+short(state.libSource):'')+
+      '<br>'+keys.length+' weight files cached locally — this app now starts with no internet.'
+    : (keys.length ? keys.length+' weight files cached, models not loaded yet.' : 'Not loaded yet.');
+}
 
 /* ================= camera ================= */
 $('btnCam').addEventListener('click', ()=> state.running ? stopCam() : startCam());
 $('btnFlip').addEventListener('click', async ()=>{
   state.facing = state.facing==='user' ? 'environment' : 'user';
+  cfg.camId=''; saveCfg();
   if(state.running){ stopCam(); await startCam(); }
 });
 
 async function startCam(){
-  if(!state.modelsReady){ toast('Models are still loading'); return; }
+  if(!state.modelsReady){
+    toast('Models are not loaded yet');
+    $('boot').classList.remove('hidden');
+    return;
+  }
+  const video = cfg.camId
+    ? {deviceId:{exact:cfg.camId}, width:{ideal:cfg.res}, height:{ideal:Math.round(cfg.res*9/16)}}
+    : {facingMode:state.facing, width:{ideal:cfg.res}, height:{ideal:Math.round(cfg.res*9/16)}};
   try{
-    state.stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:state.facing, width:{ideal:1280}, height:{ideal:720}}, audio:false
-    });
+    state.stream=await navigator.mediaDevices.getUserMedia({video, audio:false});
     vid.srcObject=state.stream;
     await vid.play();
-    ov.width=vid.videoWidth; ov.height=vid.videoHeight;
+    await waitForVideo();
+    sizeOverlay();
     state.running=true;
+    state.tracks=[];
     $('btnCam').textContent='Stop camera';
     $('btnCam').classList.remove('primary');
-    setStatus('Scanning', 'live');
-    loop();
+    setStatus('Scanning','live');
+    listCameras();
+    pump();
+    render();
   }catch(e){
     const why = e.name==='NotAllowedError'
       ? 'Camera access was blocked. Allow it in your browser’s site settings, then try again.'
       : e.name==='NotFoundError' ? 'No camera found on this device.'
+      : e.name==='NotReadableError' ? 'The camera is already in use by another app.'
+      : e.name==='OverconstrainedError' ? 'That camera cannot do the chosen resolution. Pick a lower one in Settings.'
       : 'Camera failed to start: '+e.message;
     toast(why, 5200);
     setStatus('Camera blocked','warn');
   }
+}
+function waitForVideo(){
+  if(vid.videoWidth) return Promise.resolve();
+  return new Promise(res=>{
+    const t=setTimeout(res, 3000);
+    vid.addEventListener('loadedmetadata', ()=>{ clearTimeout(t); res(); }, {once:true});
+  });
+}
+function sizeOverlay(){
+  if(!vid.videoWidth) return;
+  ov.width=vid.videoWidth; ov.height=vid.videoHeight;
 }
 function stopCam(){
   state.running=false;
@@ -485,136 +945,395 @@ function stopCam(){
   $('btnCam').classList.add('primary');
   setStatus('Camera off','');
   cancelEnrol();
-  state.seen.clear(); renderRoster();
+  state.tracks=[]; state.seen.clear(); renderRoster();
+  $('quickAdd').classList.remove('on');
 }
-function setStatus(t, cls){ $('stxt').textContent=t; $('sdot').className='dot '+cls; }
+function setStatus(t, cls){ $('stxt').textContent=t; $('sdot').className='dot '+(cls||''); }
 
-/* ================= recognition loop ================= */
-const detOpts = () => new faceapi.TinyFaceDetectorOptions({inputSize:416, scoreThreshold:0.45});
-
-async function loop(){
-  if(!state.running) return;
-  let results=[];
+async function listCameras(){
   try{
-    results=await faceapi.detectAllFaces(vid, detOpts()).withFaceLandmarks(true).withFaceDescriptors();
-  }catch(e){ /* transient */ }
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const cams=devs.filter(d=>d.kind==='videoinput');
+    if(cams.length<2) return;
+    const sel=$('camsel');
+    sel.innerHTML='<option value="">Default camera</option>'+
+      cams.map((c,i)=>`<option value="${c.deviceId}">${esc(c.label||('Camera '+(i+1)))}</option>`).join('');
+    sel.value=cfg.camId||'';
+  }catch(e){}
+}
+$('camsel').addEventListener('change', async ()=>{
+  cfg.camId=$('camsel').value; saveCfg();
+  if(state.running){ stopCam(); await startCam(); }
+});
+
+/* ================= detection engine ================= */
+function detOpts(){
+  if(cfg.mode==='best' && faceapi.nets.ssdMobilenetv1.isLoaded)
+    return new faceapi.SsdMobilenetv1Options({minConfidence:0.45, maxResults:16});
+  const inputSize = cfg.mode==='fast' ? 320 : 512;
+  return new faceapi.TinyFaceDetectorOptions({inputSize, scoreThreshold:0.4});
+}
+const useTinyLandmarks = ()=> cfg.mode==='fast' && faceapi.nets.faceLandmark68TinyNet.isLoaded;
+const TARGET_FPS = ()=> cfg.mode==='best' ? 10 : cfg.mode==='fast' ? 20 : 15;
+
+async function pump(){
+  while(state.running){
+    const t0=performance.now();
+    try{ await cycle(); }
+    catch(e){ /* transient decode/backend hiccup — keep going */ }
+    const spent=performance.now()-t0;
+    engine.frames++;
+    if(t0-engine.fpsAt>1000){ engine.fps=engine.frames*1000/(t0-engine.fpsAt); engine.frames=0; engine.fpsAt=t0; }
+    await sleep(Math.max(0, (1000/TARGET_FPS())-spent));
+  }
+}
+
+async function cycle(){
+  if(!state.running || vid.readyState<2 || !vid.videoWidth) return;
+  if(ov.width!==vid.videoWidth) sizeOverlay();
+
+  const t0=performance.now();
+  let res=[];
+  const task=faceapi.detectAllFaces(vid, detOpts());
+  res=await (useTinyLandmarks() ? task.withFaceLandmarks(true) : task.withFaceLandmarks());
+  engine.detMs=performance.now()-t0;
+  engine.faces=res.length;
 
   const now=performance.now();
-  const drawn=[];
-  const seenNow=new Set();
+  syncTracks(res, now);
 
-  for(const r of results){
-    const box=r.detection.box;
-    const id=trackId(box, now);
-    const t=state.tracks.get(id);
-
-    if(state.enrolling){
-      drawn.push({box, label:'Hold still', tone:'jade', score:null});
-      if(results.length===1) tryCapture(r, now);
-      continue;
+  const targets=descriptorTargets(now);
+  if(targets.length){
+    const t1=performance.now();
+    let crops=[];
+    try{ crops=await faceapi.extractFaces(vid, targets.map(t=>t.det.alignedRect)); }catch(e){ crops=[]; }
+    for(let i=0;i<targets.length;i++){
+      const t=targets[i], crop=crops[i];
+      if(!crop) continue;
+      t.q=measureQuality(crop, t.det);
+      let desc=null;
+      try{ desc=await faceapi.computeFaceDescriptor(crop); }catch(e){}
+      if(desc){
+        t.lastDescAt=now;
+        if(state.enrolling && state.enrolling.trackId===t.id) await tryCapture(t, crop, desc, now);
+        else classify(t, desc, now);
+      }
+      if(crop.width) crop.width=0; // release
     }
-
-    const m=matchFace(r.descriptor);
-    if(m && m.dist<=cfg.thresh){
-      if(t.name===m.person.id) t.hits++; else { t.name=m.person.id; t.hits=1; }
-    }else{
-      if(t.name===null) t.hits++; else { t.name=null; t.hits=1; }
-    }
-
-    const locked = t.hits>=cfg.frames;
-    if(locked && t.name && m){
-      drawn.push({box, label:m.person.name, tone:'amber', score:m.dist});
-      seenNow.add(m.person.id);
-      if(cfg.adapt) maybeLearn(m, r.descriptor, now);
-    }else if(locked){
-      drawn.push({box, label:'Unknown', tone:'clay', score:null});
-    }else{
-      drawn.push({box, label:'…', tone:'muted', score:null});
-    }
+    engine.descMs=performance.now()-t1;
   }
-
-  // prune stale tracks
-  for(const [k,v] of state.tracks) if(now-v.t>1200) state.tracks.delete(k);
-
-  paint(drawn, results.length);
-
-  if(!setsEqual(seenNow, state.seen)){ state.seen=seenNow; renderRoster(); }
-
-  requestAnimationFrame(loop);
+  updateSeen();
 }
 
-function setsEqual(a,b){ if(a.size!==b.size) return false; for(const x of a) if(!b.has(x)) return false; return true; }
-
-function trackId(box, now){
-  const cx=box.x+box.width/2, cy=box.y+box.height/2;
-  let best=null, bd=Infinity;
-  for(const [k,v] of state.tracks){
-    const d=Math.hypot(cx-v.cx, cy-v.cy);
-    if(d<bd && d<box.width*0.7){ bd=d; best=k; }
+/* ---- tracking: IoU-greedy association with box smoothing ---- */
+function iou(a,b){
+  const x1=Math.max(a.x,b.x), y1=Math.max(a.y,b.y);
+  const x2=Math.min(a.x+a.width,b.x+b.width), y2=Math.min(a.y+a.height,b.y+b.height);
+  const w=x2-x1, h=y2-y1;
+  if(w<=0||h<=0) return 0;
+  const inter=w*h;
+  return inter/(a.width*a.height + b.width*b.height - inter);
+}
+function syncTracks(res, now){
+  const pairs=[];
+  res.forEach((r,ri)=>{
+    state.tracks.forEach((t,ti)=>{
+      const s=iou(r.detection.box, t.raw);
+      if(s>0.22) pairs.push({s, ri, ti});
+    });
+  });
+  pairs.sort((a,b)=>b.s-a.s);
+  const usedR=new Set(), usedT=new Set();
+  for(const p of pairs){
+    if(usedR.has(p.ri)||usedT.has(p.ti)) continue;
+    usedR.add(p.ri); usedT.add(p.ti);
+    attach(state.tracks[p.ti], res[p.ri], now);
   }
-  if(best!==null){ const v=state.tracks.get(best); v.cx=cx; v.cy=cy; v.t=now; return best; }
-  const id='t'+Math.random().toString(36).slice(2,8);
-  state.tracks.set(id,{cx,cy,t:now,name:undefined,hits:0});
-  return id;
+  res.forEach((r,ri)=>{
+    if(usedR.has(ri)) return;
+    const t=newTrack(r, now);
+    state.tracks.push(t);
+  });
+  state.tracks.forEach((t,ti)=>{ if(!usedT.has(ti) && t.seenAt!==now) t.det=null; });
+  state.tracks=state.tracks.filter(t=>now-t.seenAt<900);
+}
+function newTrack(r, now){
+  const b=r.detection.box;
+  return {
+    id:'t'+(state.nextTrack++), det:r, raw:b, box:{x:b.x,y:b.y,width:b.width,height:b.height},
+    seenAt:now, bornAt:now, lastDescAt:0, q:null,
+    cand:null, hits:0, smooth:null, rawDist:null, margin:null, person:null, locked:false,
+    ear:[], blinkState:0, blinked:false, unknownSince:0
+  };
+}
+function attach(t, r, now){
+  const b=r.detection.box;
+  t.det=r; t.raw=b; t.seenAt=now;
+  const k=0.55;
+  t.box={
+    x:t.box.x+(b.x-t.box.x)*k, y:t.box.y+(b.y-t.box.y)*k,
+    width:t.box.width+(b.width-t.box.width)*k, height:t.box.height+(b.height-t.box.height)*k
+  };
+  trackEAR(t, r.landmarks, now);
 }
 
-function dist(a,b){ let s=0; for(let i=0;i<a.length;i++){ const d=a[i]-b[i]; s+=d*d; } return Math.sqrt(s); }
+/* Descriptors are the expensive part, so only compute them where they can
+   still change an answer: new faces every cycle, settled faces occasionally. */
+function descriptorTargets(now){
+  const live=state.tracks.filter(t=>t.det);
+  if(state.enrolling){
+    const t=live.find(x=>x.id===state.enrolling.trackId) || biggest(live);
+    if(t) state.enrolling.trackId=t.id;
+    return t ? [t] : [];
+  }
+  const out=[];
+  for(const t of live){
+    if(t.det.detection.box.width < 54) continue;
+    const age=now-t.lastDescAt;
+    const interval = !t.locked ? 0 : (t.cand ? 900 : 500);
+    if(age>=interval) out.push(t);
+  }
+  return out.sort((a,b)=>b.det.detection.box.width-a.det.detection.box.width).slice(0,6);
+}
+function biggest(list){
+  let b=null;
+  for(const t of list) if(!b || t.det.detection.box.width>b.det.detection.box.width) b=t;
+  return b;
+}
 
-function matchFace(desc){
-  let best=null, bd=Infinity;
-  for(const p of state.people){
-    for(const d of p.descriptors){
-      const v=dist(desc, d);
-      if(v<bd){ bd=v; best=p; }
+/* ---- image quality, measured on the aligned crop ---- */
+const qc=document.createElement('canvas'); qc.width=96; qc.height=96;
+const qx=qc.getContext('2d', {willReadFrequently:true});
+function measureQuality(crop, det){
+  let light=0, contrast=0, sharp=0;
+  try{
+    qx.drawImage(crop, 0, 0, 96, 96);
+    const d=qx.getImageData(0,0,96,96).data;
+    const g=new Float32Array(96*96);
+    let sum=0;
+    for(let i=0,p=0;i<g.length;i++,p+=4){
+      const v=0.299*d[p]+0.587*d[p+1]+0.114*d[p+2];
+      g[i]=v; sum+=v;
     }
-  }
-  return best ? {person:best, dist:bd} : null;
+    const mean=sum/g.length;
+    let varSum=0;
+    for(let i=0;i<g.length;i++){ const dv=g[i]-mean; varSum+=dv*dv; }
+    contrast=Math.sqrt(varSum/g.length);
+    let ls=0, ls2=0, n=0;
+    for(let y=1;y<95;y++) for(let x=1;x<95;x++){
+      const i=y*96+x;
+      const l=4*g[i]-g[i-1]-g[i+1]-g[i-96]-g[i+96];
+      ls+=l; ls2+=l*l; n++;
+    }
+    const lm=ls/n;
+    sharp=ls2/n-lm*lm;
+    light=mean;
+  }catch(e){ return null; }
+  const size=det.detection.box.width;
+  const p=poseOf(det.landmarks);
+  const q={
+    light, contrast, sharp, size, pose:p,
+    okLight: light>=42 && light<=228 && contrast>=20,
+    okSharp: sharp>=34,
+    okSize:  size>=Math.max(96, ov.width*0.085),
+    okAngle: Math.abs(p.roll)<=26
+  };
+  q.score = (q.okLight?0.3:0) + (q.okSharp?0.3:0) + (q.okSize?0.25:0) + (q.okAngle?0.15:0);
+  return q;
+}
+function centroid(pts){
+  let x=0,y=0;
+  for(const p of pts){ x+=p.x; y+=p.y; }
+  return {x:x/pts.length, y:y/pts.length};
+}
+function poseOf(lm){
+  try{
+    const pts=lm.positions;
+    const le=centroid(pts.slice(36,42)), re=centroid(pts.slice(42,48));
+    const nose=pts[30], chin=pts[8];
+    const eyeMid={x:(le.x+re.x)/2, y:(le.y+re.y)/2};
+    const eyeDist=Math.hypot(re.x-le.x, re.y-le.y)||1;
+    const roll=Math.atan2(re.y-le.y, re.x-le.x)*180/Math.PI;
+    const yaw=((nose.x-eyeMid.x)/eyeDist)*90;
+    const faceLen=Math.hypot(chin.x-eyeMid.x, chin.y-eyeMid.y)||1;
+    const pitch=(((nose.y-eyeMid.y)/faceLen)-0.42)*150;
+    return {roll, yaw, pitch};
+  }catch(e){ return {roll:0, yaw:0, pitch:0}; }
 }
 
-async function maybeLearn(m, desc, now){
-  const p=m.person;
-  if(m.dist>0.32) return;
-  if(p.descriptors.length>=30) return;
-  if(now-(p.lastLearn||0) < 20000) return;
-  p.lastLearn=now;
-  p.descriptors.push(Array.from(desc));
+/* ---- blink detection (eye aspect ratio) ---- */
+function earOf(pts){
+  const e=(a,b,c,d,f,g)=>(Math.hypot(pts[b].x-pts[g].x,pts[b].y-pts[g].y)+
+                          Math.hypot(pts[c].x-pts[f].x,pts[c].y-pts[f].y))/
+                         (2*Math.hypot(pts[a].x-pts[d].x,pts[a].y-pts[d].y)||1);
+  return (e(36,37,38,39,40,41)+e(42,43,44,45,46,47))/2;
+}
+function trackEAR(t, lm, now){
+  if(!lm) return;
+  let v;
+  try{ v=earOf(lm.positions); }catch(e){ return; }
+  if(!isFinite(v)) return;
+  t.ear.push(v); if(t.ear.length>14) t.ear.shift();
+  if(t.blinkState===0 && v<0.185) t.blinkState=1;
+  else if(t.blinkState===1 && v>0.245){ t.blinkState=0; t.blinked=true; t.blinkAt=now; }
+}
+
+/* ================= matching =================
+   A single nearest-neighbour distance is easy to fool: one bad enrolled
+   sample becomes a permanent false match. The score below blends the closest
+   sample, the mean of the closest three, and the profile centroid, then a
+   runner-up margin decides whether the winner is trustworthy at all. */
+function l2(a,b){
+  let s=0;
+  for(let i=0;i<a.length;i++){ const d=a[i]-b[i]; s+=d*d; }
+  return Math.sqrt(s);
+}
+function centroidOf(p){
+  if(p._cen) return p._cen;
+  const n=p.descriptors.length;
+  if(!n) return null;
+  const c=new Float64Array(128);
+  for(const d of p.descriptors) for(let i=0;i<128;i++) c[i]+=d[i];
+  for(let i=0;i<128;i++) c[i]/=n;
+  p._cen=c;
+  return c;
+}
+function personDistance(desc, p){
+  if(!p.descriptors.length) return Infinity;
+  const ds=[];
+  for(const d of p.descriptors) ds.push(l2(desc,d));
+  ds.sort((a,b)=>a-b);
+  const k=Math.min(3, ds.length);
+  let s=0; for(let i=0;i<k;i++) s+=ds[i];
+  const topk=s/k;
+  const cen=centroidOf(p);
+  const cd=cen?l2(desc,cen):ds[0];
+  return 0.45*ds[0] + 0.35*topk + 0.20*cd;
+}
+function rank(desc){
+  const out=[];
+  for(const p of state.people) out.push({p, d:personDistance(desc,p)});
+  out.sort((a,b)=>a.d-b.d);
+  return out;
+}
+function classify(t, desc, now){
+  const ranked=rank(desc);
+  const best=ranked[0]||null, second=ranked[1]||null;
+  const margin=best ? (second ? second.d-best.d : 1) : 0;
+  const q=t.q;
+  const qualityOk = !q || (q.okSize && q.okLight);
+  const accept = !!best && best.d<=cfg.thresh && margin>=cfg.margin && qualityOk;
+  const cand=accept?best.p.id:null;
+
+  if(cand===t.cand) t.hits++;
+  else { t.cand=cand; t.hits=1; t.smooth=best?best.d:null; }
+  if(best) t.smooth = t.smooth==null ? best.d : t.smooth*0.5+best.d*0.5;
+
+  t.rawDist=best?best.d:null;
+  t.margin=best?margin:null;
+  t.person=cand ? state.people.find(p=>p.id===cand)||null : null;
+  t.locked=t.hits>=cfg.frames;
+  t.lowQuality = !!(q && !qualityOk);
+
+  if(t.locked && !t.person){ if(!t.unknownSince) t.unknownSince=now; }
+  else t.unknownSince=0;
+
+  if(t.locked && t.person && cfg.adapt) maybeLearn(t, desc, now);
+}
+function verified(t){ return !cfg.liveness || t.blinked; }
+
+const LEARN_CAP=40;
+async function maybeLearn(t, desc, now){
+  const p=t.person, q=t.q;
+  if(!p || !q) return;
+  if(t.rawDist==null || t.rawDist > Math.min(0.33, cfg.thresh*0.72)) return;
+  if((t.margin||0) < 0.12) return;
+  if(q.score < 0.85) return;
+  if(!verified(t)) return;
+  if(now-(p._lastLearn||0) < 15000) return;
+  const arr=Array.from(desc);
+  let closest=Infinity;
+  for(const d of p.descriptors) closest=Math.min(closest, l2(arr,d));
+  if(closest < 0.20) return;            // nothing new to learn from
+  p._lastLearn=now; p.lastLearn=Date.now();
+  p.descriptors.push(arr);
+  prune(p, LEARN_CAP);
+  p._cen=null;
   await savePeople();
   renderRoster();
 }
+/* Keep the most varied samples rather than the oldest ones. */
+function prune(p, cap){
+  while(p.descriptors.length>cap){
+    const n=p.descriptors.length;
+    let worst=0, worstScore=Infinity;
+    for(let i=0;i<n;i++){
+      let near=Infinity;
+      for(let j=0;j<n;j++){ if(i===j) continue; near=Math.min(near, l2(p.descriptors[i], p.descriptors[j])); }
+      if(near<worstScore){ worstScore=near; worst=i; }
+    }
+    p.descriptors.splice(worst,1);
+  }
+}
+
+function updateSeen(){
+  const now=performance.now();
+  const s=new Set();
+  for(const t of state.tracks){
+    if(t.det && t.locked && t.person && verified(t)){
+      s.add(t.person.id);
+      t.person.lastSeen=Date.now();
+    }
+  }
+  if(!setsEqual(s, state.seen)){ state.seen=s; renderRoster(); }
+  const unknown=state.tracks.find(t=>t.det && t.locked && !t.person && t.unknownSince && now-t.unknownSince>1200);
+  $('quickAdd').classList.toggle('on', !!unknown && !state.enrolling);
+}
+function setsEqual(a,b){ if(a.size!==b.size) return false; for(const x of a) if(!b.has(x)) return false; return true; }
+
+function confidenceOf(d){
+  if(d==null) return null;
+  const hi=0.20, mid=cfg.thresh;
+  if(d<=hi) return 1;
+  if(d<=mid) return 1-0.5*(d-hi)/Math.max(0.01,mid-hi);
+  return Math.max(0, 0.5-0.5*(d-mid)/0.15);
+}
 
 /* ================= painting ================= */
-function paint(items, count){
+const TONES={amber:'#E8A33D', clay:'#D0685F', jade:'#5FA88C', muted:'#8AA0AB', violet:'#8E86C9'};
+function render(){
+  if(!state.running) return;
+  draw();
+  requestAnimationFrame(render);
+}
+function draw(){
   ctx.clearRect(0,0,ov.width,ov.height);
   const mir=cfg.mirror && state.facing==='user';
-  const tones={amber:'#E8A33D', clay:'#D0685F', jade:'#5FA88C', muted:'#8AA0AB'};
+  const now=performance.now();
+  let live=0;
 
-  for(const it of items){
-    let {x,y,width:w,height:h}=it.box;
-    if(mir) x = ov.width - x - w;
-    const col=tones[it.tone];
-    const c=Math.min(w,h)*0.22;
+  const shown=[];
 
-    ctx.strokeStyle=col; ctx.lineWidth=Math.max(2, ov.width/500); ctx.lineCap='round';
-    ctx.beginPath();
-    ctx.moveTo(x, y+c); ctx.lineTo(x,y); ctx.lineTo(x+c, y);
-    ctx.moveTo(x+w-c, y); ctx.lineTo(x+w,y); ctx.lineTo(x+w, y+c);
-    ctx.moveTo(x+w, y+h-c); ctx.lineTo(x+w,y+h); ctx.lineTo(x+w-c, y+h);
-    ctx.moveTo(x+c, y+h); ctx.lineTo(x,y+h); ctx.lineTo(x, y+h-c);
-    ctx.stroke();
-
-    const fs=Math.max(15, Math.round(ov.width/48));
-    ctx.font=`500 ${fs}px "Instrument Sans", system-ui, sans-serif`;
-    const conf = it.score!=null ? '  '+Math.max(0,Math.round((1-it.score/0.7)*100))+'%' : '';
-    const text=it.label+conf;
-    const tw=ctx.measureText(text).width;
-    const bx=x, by=y+h+8, bh=fs*1.9;
-    ctx.fillStyle='rgba(11,23,30,.82)';
-    roundRect(bx, by, tw+22, bh, 6); ctx.fill();
-    ctx.fillStyle=col;
-    ctx.fillText(text, bx+11, by+bh/2+fs*0.36);
+  for(const t of state.tracks){
+    if(now-t.seenAt>420) continue;
+    live++;
+    let label='…', tone='muted', conf=null;
+    if(state.enrolling){
+      if(state.enrolling.trackId===t.id){ label='Hold still'; tone='jade'; }
+      else { label='Other face — ignored'; tone='muted'; }
+    }else if(t.locked && t.person){
+      if(!verified(t)){ label='Blink to confirm'; tone='violet'; }
+      else { label=t.person.name; tone='amber'; conf=confidenceOf(t.smooth); }
+    }else if(t.locked){
+      label = t.lowQuality ? 'Unknown — poor image' : 'Unknown';
+      tone='clay';
+    }
+    drawFace(t, label, tone, conf, mir);
+    shown.push(conf!=null ? label+' '+Math.round(conf*100)+'%' : label);
   }
+  window.__fgLabels=shown;   // what the overlay currently says; no face data
 
-  if(count===0 && !state.enrolling){
+  if(live===0 && !state.enrolling){
     ctx.fillStyle='rgba(138,160,171,.85)';
     const fs=Math.max(14, Math.round(ov.width/60));
     ctx.font=`400 ${fs}px "Instrument Sans", system-ui, sans-serif`;
@@ -622,31 +1341,121 @@ function paint(items, count){
     ctx.fillText('Looking for a face', ov.width/2, ov.height*0.5);
     ctx.textAlign='left';
   }
+  updateHud();
+}
+function drawFace(t, label, tone, conf, mir){
+  let {x,y,width:w,height:h}=t.box;
+  if(mir) x = ov.width - x - w;
+  const col=TONES[tone];
+  const c=Math.min(w,h)*0.22;
+
+  ctx.strokeStyle=col; ctx.lineWidth=Math.max(2, ov.width/500); ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(x, y+c); ctx.lineTo(x,y); ctx.lineTo(x+c, y);
+  ctx.moveTo(x+w-c, y); ctx.lineTo(x+w,y); ctx.lineTo(x+w, y+c);
+  ctx.moveTo(x+w, y+h-c); ctx.lineTo(x+w,y+h); ctx.lineTo(x+w-c, y+h);
+  ctx.moveTo(x+c, y+h); ctx.lineTo(x,y+h); ctx.lineTo(x, y+h-c);
+  ctx.stroke();
+
+  if(cfg.showMarks && t.det && t.det.landmarks){
+    ctx.fillStyle=col;
+    const r=Math.max(1.2, ov.width/720);
+    for(const p of t.det.landmarks.positions){
+      const px = mir ? ov.width-p.x : p.x;
+      ctx.beginPath(); ctx.arc(px, p.y, r, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  const fs=Math.max(15, Math.round(ov.width/48));
+  ctx.font=`500 ${fs}px "Instrument Sans", system-ui, sans-serif`;
+  const text = label + (conf!=null ? '  '+Math.round(conf*100)+'%' : '');
+  const tw=ctx.measureText(text).width;
+  const bx=x, by=y+h+8, bh=fs*1.9;
+  ctx.fillStyle='rgba(11,23,30,.82)';
+  roundRect(bx, by, tw+22, bh, 6); ctx.fill();
+  ctx.fillStyle=col;
+  ctx.fillText(text, bx+11, by+bh/2+fs*0.36);
 }
 function roundRect(x,y,w,h,r){
   ctx.beginPath();
   ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
+function updateHud(){
+  if(!cfg.showHud) return;
+  $('hFps').textContent=engine.fps.toFixed(1)+'/s';
+  $('hDet').textContent=engine.detMs.toFixed(0);
+  $('hDesc').textContent=engine.descMs.toFixed(0);
+  $('hFaces').textContent=engine.faces;
+  $('hBack').textContent=engine.backend;
+}
 
-/* ================= enrolment ================= */
-const CUES=['Look straight at the camera','Turn your head slightly left','Turn slightly right','Lift your chin a little','Look down a touch','Smile','Neutral expression','Step a little closer','Lean back slightly','Tilt your head','Straight on again','One more, straight on'];
-
-$('btnEnrol').addEventListener('click', ()=>{
-  const name=$('newName').value.trim();
-  if(!name){ toast('Type a name first'); $('newName').focus(); return; }
-  if(!state.running){ toast('Start the camera first'); return; }
-  if(state.people.some(p=>p.name.toLowerCase()===name.toLowerCase())){
-    if(!confirm(`${name} is already enrolled. Add more samples to that profile?`)) return;
+/* ================= enrolment =================
+   Guided, quality-gated capture. Every accepted pose is stored twice: as
+   seen and mirrored, which covers the other side of the face for free. */
+const STEP_KINDS=['straight','sideA','sideB','vertA','vertB','smile','closer','straight','sideA','sideB','vertA','straight'];
+const STEP_TEXT={
+  straight:'Look straight at the camera',
+  sideA:'Turn your head slightly to one side',
+  sideB:'Now turn to the other side',
+  vertA:'Tip your chin up or down a little',
+  vertB:'Now the other way',
+  smile:'Smile, facing the camera',
+  closer:'Move a little closer, facing the camera'
+};
+function buildPlan(n){
+  const plan=[];
+  for(let i=0;i<n;i++) plan.push(STEP_KINDS[i%STEP_KINDS.length]);
+  return plan;
+}
+function stepOk(kind, p, e, size){
+  const ay=Math.abs(p.yaw), ap=Math.abs(p.pitch);
+  switch(kind){
+    case 'straight': case 'smile': return ay<=12 && ap<=15;
+    case 'closer':   return ay<=15 && ap<=18 && size>=e.baseSize*1.18;
+    case 'sideA':    return ay>=13 && ay<=40;
+    case 'sideB':    return ay>=13 && ay<=40 && (!e.sideSign || Math.sign(p.yaw)!==e.sideSign);
+    case 'vertA':    return ap>=10 && ap<=34;
+    case 'vertB':    return ap>=10 && ap<=34 && (!e.vertSign || Math.sign(p.pitch)!==e.vertSign);
   }
-  state.enrolling={name, need:cfg.shots, got:[], last:0};
+  return true;
+}
+function stepHint(kind, p, e, size){
+  const ay=Math.abs(p.yaw), ap=Math.abs(p.pitch);
+  switch(kind){
+    case 'straight': case 'smile': return (ay>12||ap>15) ? 'Face the camera squarely' : '';
+    case 'closer':   return size<e.baseSize*1.18 ? 'A little closer' : 'Face the camera squarely';
+    case 'sideA':    return ay<13 ? 'Turn a bit more' : 'Not quite that far';
+    case 'sideB':    return ay<13 ? 'Turn a bit more' : (e.sideSign && Math.sign(p.yaw)===e.sideSign) ? 'The other side this time' : 'Not quite that far';
+    case 'vertA':    return ap<10 ? 'A little more' : 'Not quite that far';
+    case 'vertB':    return ap<10 ? 'A little more' : (e.vertSign && Math.sign(p.pitch)===e.vertSign) ? 'The other way this time' : 'Not quite that far';
+  }
+  return '';
+}
+
+$('btnEnrol').addEventListener('click', ()=>startEnrol($('newName').value.trim()));
+$('quickAdd').addEventListener('click', ()=>{
+  showPane('Add');
+  $('newName').focus();
+  toast('Type a name, then press “Capture face”');
+});
+
+function startEnrol(name){
+  if(!name){ toast('Type a name first'); showPane('Add'); $('newName').focus(); return; }
+  if(!state.running){ toast('Start the camera first'); return; }
+  const dupe=state.people.find(p=>p.name.toLowerCase()===name.toLowerCase());
+  if(dupe && !confirm(`${name} is already enrolled. Add more poses to that profile?`)) return;
+  state.enrolling={
+    name, need:cfg.shots, got:[], aug:[], plan:buildPlan(cfg.shots),
+    last:0, stepAt:performance.now(), trackId:null, baseSize:0, sideSign:0, vertSign:0, why:''
+  };
   $('cap').classList.remove('hidden');
   $('capwho').textContent='Capturing '+name;
   $('btnStopEnrol').style.display='block';
+  $('quickAdd').classList.remove('on');
   updateCap();
-  setStatus('Capturing samples','live');
-});
-
+  setStatus('Capturing poses','live');
+}
 $('btnStopEnrol').addEventListener('click', cancelEnrol);
 function cancelEnrol(){
   if(!state.enrolling) return;
@@ -657,56 +1466,124 @@ function cancelEnrol(){
 }
 function updateCap(){
   const e=state.enrolling; if(!e) return;
-  $('capcue').textContent=CUES[e.got.length % CUES.length];
+  const kind=e.plan[e.got.length]||'straight';
+  $('capcue').textContent=STEP_TEXT[kind]||'Look at the camera';
+  $('capwhy').textContent=e.why||'';
   $('capbars').innerHTML=Array.from({length:e.need},(_,i)=>`<i class="${i<e.got.length?'on':''}"></i>`).join('');
 }
-async function tryCapture(r, now){
-  const e=state.enrolling;
-  if(now-e.last<850) return;
-  if(r.detection.score<0.6) return;
-  // reject a sample that is nearly identical to one we already have
-  if(e.got.some(d=>dist(d, r.descriptor)<0.08)) return;
-  e.last=now;
-  e.got.push(Array.from(r.descriptor));
+function setQ(id, ok){ $(id).className = ok ? 'ok' : ''; }
+
+const mc=document.createElement('canvas'), mx=mc.getContext('2d');
+async function mirrorDescriptor(crop){
+  try{
+    mc.width=crop.width; mc.height=crop.height;
+    mx.setTransform(-1,0,0,1,crop.width,0);
+    mx.drawImage(crop,0,0);
+    mx.setTransform(1,0,0,1,0,0);
+    return await faceapi.computeFaceDescriptor(mc);
+  }catch(e){ return null; }
+}
+
+async function tryCapture(t, crop, desc, now){
+  const e=state.enrolling, q=t.q;
+  if(!e || !q) return;
+  if(!e.baseSize) e.baseSize=q.size;
+
+  setQ('qLight', q.okLight); setQ('qSharp', q.okSharp);
+  setQ('qSize', q.okSize);  setQ('qPose', q.okAngle);
+
+  const kind=e.plan[e.got.length]||'straight';
+  const relaxed = now-e.stepAt > 8000;      // never let the user get stuck
+  let why='';
+  if(!q.okSize) why='Come closer to the camera';
+  else if(!q.okLight) why = q.light<42 ? 'Too dark — find more light' : q.contrast<20 ? 'Too flat — avoid strong backlight' : 'Too bright';
+  else if(!q.okSharp) why='Hold steadier — the image is blurry';
+  else if(!q.okAngle) why='Straighten your head a little';
+  else if(t.det.detection.score<0.55) why='Face not clearly visible';
+  else if(!relaxed && !stepOk(kind, q.pose, e, q.size)) why=stepHint(kind, q.pose, e, q.size);
+  e.why=why; updateCap();
+  if(why) return;
+  if(now-e.last<600) return;
+
+  const arr=Array.from(desc);
+  for(const d of e.got) if(l2(d,arr)<0.085){ e.why='Change the pose a little'; updateCap(); return; }
+
+  if(kind==='sideA') e.sideSign=Math.sign(q.pose.yaw)||1;
+  if(kind==='vertA') e.vertSign=Math.sign(q.pose.pitch)||1;
+
+  e.got.push(arr);
+  const m=await mirrorDescriptor(crop);
+  if(m) e.aug.push(Array.from(m));
+  e.last=now; e.stepAt=now; e.why='';
   updateCap();
   if(e.got.length>=e.need) await finishEnrol();
 }
+
 async function finishEnrol(){
-  const e=state.enrolling; state.enrolling=null;
+  const e=state.enrolling;
+  state.enrolling=null;
   $('cap').classList.add('hidden');
   $('btnStopEnrol').style.display='none';
+  const all=e.got.concat(e.aug);
   const existing=state.people.find(p=>p.name.toLowerCase()===e.name.toLowerCase());
-  if(existing){ existing.descriptors.push(...e.got); }
-  else state.people.push({id:'p'+Date.now().toString(36), name:e.name, descriptors:e.got, created:Date.now()});
+  if(existing){
+    existing.descriptors.push(...all);
+    prune(existing, Math.max(LEARN_CAP, e.need*2));
+    existing._cen=null;
+  }else{
+    state.people.push({
+      id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      name:e.name, descriptors:all, created:Date.now(), _cen:null
+    });
+  }
   await savePeople();
   $('newName').value='';
   renderRoster(); showPane('People');
-  toast(`${e.name} enrolled with ${e.got.length} samples`);
+  toast(`${e.name} enrolled — ${e.got.length} poses, ${all.length} descriptors`, 3600);
   if(state.running) setStatus('Scanning','live');
 }
 
 /* ================= roster ================= */
+function ago(ts){
+  if(!ts) return 'not seen yet';
+  const s=(Date.now()-ts)/1000;
+  if(s<60) return 'seen just now';
+  if(s<3600) return 'seen '+Math.round(s/60)+'m ago';
+  if(s<86400) return 'seen '+Math.round(s/3600)+'h ago';
+  return 'seen '+Math.round(s/86400)+'d ago';
+}
 function renderRoster(){
   const ul=$('roster');
   $('rosterEmpty').style.display=state.people.length?'none':'block';
   ul.innerHTML=state.people.map(p=>{
-    const n=Math.min(10, Math.round(p.descriptors.length/3));
-    const ticks=Array.from({length:10},(_,i)=>`<i class="${i<n?'on':''}"></i>`).join('');
-    const quality = p.descriptors.length<6 ? 'add more samples' : p.descriptors.length<12 ? 'good' : 'strong';
+    const n=p.descriptors.length;
+    const filled=Math.min(10, Math.round(n/4));
+    const cls=n<8?'mid':'on';
+    const ticks=Array.from({length:10},(_,i)=>`<i class="${i<filled?cls:''}"></i>`).join('');
+    const quality = n<8 ? '<span class="pill bad">add more poses</span>'
+                  : n<16 ? '<span class="pill warn">good</span>'
+                  : '<span class="pill good">strong</span>';
     return `<li class="person ${state.seen.has(p.id)?'seen':''}">
       <span class="nm">${esc(p.name)}</span>
-      <button class="del" data-id="${p.id}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">×</button>
-      <span class="meta"><span class="ticks">${ticks}</span>${p.descriptors.length} samples · ${quality}</span>
+      <button class="ic ren" data-id="${p.id}" title="Rename ${esc(p.name)}" aria-label="Rename ${esc(p.name)}">✎</button>
+      <button class="ic del" data-id="${p.id}" title="Remove ${esc(p.name)}" aria-label="Remove ${esc(p.name)}">×</button>
+      <span class="meta"><span class="ticks">${ticks}</span>${n} descriptors ${quality} · ${ago(p.lastSeen)}</span>
     </li>`;
   }).join('');
   ul.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async ()=>{
-    const p=state.people.find(x=>x.id===b.dataset.id);
+    const p=state.people.find(x=>x.id===b.dataset.id); if(!p) return;
     if(!confirm(`Remove ${p.name} and all their face data?`)) return;
-    state.people=state.people.filter(x=>x.id!==b.dataset.id);
+    state.people=state.people.filter(x=>x.id!==p.id);
     await savePeople(); renderRoster(); toast(`${p.name} removed`);
   }));
+  ul.querySelectorAll('.ren').forEach(b=>b.addEventListener('click', async ()=>{
+    const p=state.people.find(x=>x.id===b.dataset.id); if(!p) return;
+    const name=(prompt('New name for this profile:', p.name)||'').trim();
+    if(!name || name===p.name) return;
+    p.name=name; await savePeople(); renderRoster();
+  }));
 }
-function esc(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ================= tabs ================= */
 const panes={People:['tabPeople','panePeople'], Add:['tabAdd','paneAdd'], Settings:['tabSet','paneSet']};
@@ -722,75 +1599,144 @@ $('tabAdd').addEventListener('click',()=>showPane('Add'));
 $('tabSet').addEventListener('click',()=>showPane('Settings'));
 
 /* ================= settings ================= */
-function bindRange(id, outId, key, fmt){
+function bindRange(id, outId, key, parse, fmt){
   const el=$(id), out=$(outId);
   el.value=cfg[key]; out.textContent=fmt?fmt(cfg[key]):cfg[key];
   el.addEventListener('input',()=>{
-    cfg[key]= key==='thresh' ? parseFloat(el.value) : parseInt(el.value,10);
+    cfg[key]=parse(el.value);
     out.textContent=fmt?fmt(cfg[key]):cfg[key];
-    cfg.save();
+    saveCfg();
   });
 }
-bindRange('thresh','threshOut','thresh', v=>v.toFixed(2));
-bindRange('frames','framesOut','frames');
-bindRange('shots','shotsOut','shots');
+const f2=v=>v.toFixed(2);
+bindRange('thresh','threshOut','thresh', parseFloat, f2);
+bindRange('margin','marginOut','margin', parseFloat, f2);
+bindRange('frames','framesOut','frames', v=>parseInt(v,10));
+bindRange('shots','shotsOut','shots',   v=>parseInt(v,10));
 
-$('adapt').checked=cfg.adapt;
-$('adapt').addEventListener('change',()=>{ cfg.adapt=$('adapt').checked; cfg.save(); });
-$('mirror').checked=cfg.mirror;
-$('mirror').addEventListener('change',()=>{
-  cfg.mirror=$('mirror').checked; cfg.save();
-  vid.classList.toggle('nomirror', !cfg.mirror);
-});
+function bindCheck(id, key, after){
+  const el=$(id);
+  el.checked=!!cfg[key];
+  el.addEventListener('change',()=>{ cfg[key]=el.checked; saveCfg(); after&&after(); });
+}
+bindCheck('adapt','adapt');
+bindCheck('liveness','liveness', ()=>{ state.tracks.forEach(t=>{ t.blinked=false; }); });
+bindCheck('mirror','mirror', ()=>vid.classList.toggle('nomirror', !cfg.mirror));
+bindCheck('showMarks','showMarks');
+bindCheck('showHud','showHud', ()=>$('hud').classList.toggle('on', cfg.showHud));
 vid.classList.toggle('nomirror', !cfg.mirror);
+$('hud').classList.toggle('on', cfg.showHud);
+
+const MODE_HINTS={
+  fast:'Tiny detector at 320 px with light landmarks. Fewest computations, misses small and angled faces more often.',
+  balanced:'Tiny detector at 512 px with full 68-point landmarks, so faces are aligned properly before recognition. Best accuracy per watt.',
+  best:'SSD MobileNet v1 detector with full landmarks — finds smaller, darker and more angled faces than the tiny detector, at roughly half the frame rate and a one-time 5 MB download.'
+};
+$('mode').value=cfg.mode;
+$('modeHint').textContent=MODE_HINTS[cfg.mode];
+$('mode').addEventListener('change', async ()=>{
+  const prev=cfg.mode;
+  cfg.mode=$('mode').value; saveCfg();
+  $('modeHint').textContent=MODE_HINTS[cfg.mode];
+  const needed=netsFor(cfg.mode).filter(k=>!NETS[k].get().isLoaded);
+  if(needed.length && !(cfg.mode==='fast' && faceapi.nets.faceLandmark68Net.isLoaded)){
+    const wasRunning=state.running;
+    if(wasRunning) stopCam();
+    state.modelsReady=false;
+    await bootModels();
+    if(!state.modelsReady){
+      cfg.mode=prev; $('mode').value=prev; saveCfg();
+      toast('Could not fetch the extra model — staying on '+prev, 4200);
+      state.modelsReady=netsFor(prev).every(k=>NETS[k].get().isLoaded);
+    }
+    if(wasRunning && state.modelsReady) await startCam();
+  }
+});
+
+$('res').value=String(cfg.res);
+$('res').addEventListener('change', async ()=>{
+  cfg.res=parseInt($('res').value,10); saveCfg();
+  if(state.running){ stopCam(); await startCam(); }
+});
 
 $('btnLock').addEventListener('click', ()=>{ stopCam(); location.reload(); });
 $('btnWipe').addEventListener('click', async ()=>{
   if(!confirm('Erase every enrolled face and the vault itself? This cannot be undone.')) return;
-  await wipeDB(); localStorage.removeItem('fg.cfg'); location.reload();
+  await idbClear(STORE);
+  try{ localStorage.removeItem('fg.cfg'); }catch(e){}
+  location.reload();
 });
 
+/* ================= backup ================= */
 $('btnExport').addEventListener('click', async ()=>{
-  const salt=await get('salt');
-  const blob=await seal(state.key, state.people);
-  const payload={format:'facegate.v1', salt, vault:blob};
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));
-  a.download=`facegate-backup-${new Date().toISOString().slice(0,10)}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
-  toast('Backup saved, still encrypted');
+  try{
+    const salt=await get('salt');
+    const kdf=await get('kdf');
+    const blob=await seal(state.key, strip(state.people));
+    const payload={format:'facegate.v2', salt, kdf:{iters:(kdf&&kdf.iters)||KDF_LEGACY}, vault:blob};
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));
+    a.download=`facegate-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    toast('Backup saved, still encrypted');
+  }catch(e){ toast('Export failed: '+(e.message||e), 4200); }
 });
 
 $('btnImport').addEventListener('click', ()=>$('fileIn').click());
 $('fileIn').addEventListener('change', async ev=>{
-  const f=ev.target.files[0]; if(!f) return;
+  const f=ev.target.files[0];
+  ev.target.value='';
+  if(!f) return;
   try{
     const data=JSON.parse(await f.text());
-    if(data.format!=='facegate.v1') throw new Error('Not a Facegate backup');
-    const key=await deriveKey(prompt('Passphrase that protects this backup:')||'', new Uint8Array(data.salt));
-    const incoming=await open_(key, data.vault);
+    if(data.format!=='facegate.v1' && data.format!=='facegate.v2') throw new Error('Not a Facegate backup');
+    const iters = data.format==='facegate.v2' ? ((data.kdf&&data.kdf.iters)||KDF_LEGACY) : KDF_LEGACY;
+    const pass=prompt('Passphrase that protects this backup:');
+    if(pass===null) return;
+    const key=await deriveKey(pass, new Uint8Array(data.salt), iters);
+    let incoming;
+    try{ incoming=await open_(key, data.vault); }
+    catch(e){ throw new Error('wrong passphrase for that backup'); }
     let added=0, merged=0;
     for(const p of incoming){
-      const hit=state.people.find(x=>x.name.toLowerCase()===p.name.toLowerCase());
-      if(hit){ hit.descriptors.push(...p.descriptors); merged++; }
-      else { state.people.push(p); added++; }
+      if(!p || !Array.isArray(p.descriptors)) continue;
+      const hit=state.people.find(x=>x.name.toLowerCase()===String(p.name).toLowerCase());
+      if(hit){
+        hit.descriptors.push(...p.descriptors.map(d=>Array.from(d)));
+        prune(hit, Math.max(LEARN_CAP, hit.descriptors.length));
+        hit._cen=null; merged++;
+      }else{
+        state.people.push({id:p.id||('p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
+          name:p.name, descriptors:p.descriptors.map(d=>Array.from(d)),
+          created:p.created||Date.now(), lastSeen:p.lastSeen, _cen:null});
+        added++;
+      }
     }
     await savePeople(); renderRoster();
     toast(`Imported — ${added} new, ${merged} merged`);
   }catch(e){
-    toast('Import failed: '+(e.message||'wrong passphrase'), 4200);
+    toast('Import failed: '+(e.message||'unreadable file'), 4600);
   }
-  ev.target.value='';
 });
 
-/* ================= toast ================= */
+/* ================= misc ================= */
 let tt;
 function toast(msg, ms=2600){
   const t=$('toast'); t.textContent=msg; t.classList.add('on');
   clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('on'), ms);
 }
-
-window.addEventListener('resize', ()=>{ if(vid.videoWidth){ ov.width=vid.videoWidth; ov.height=vid.videoHeight; } });
+window.addEventListener('resize', sizeOverlay);
+vid.addEventListener('loadedmetadata', sizeOverlay);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && state.enrolling) cancelEnrol();
+});
+window.addEventListener('keydown', e=>{
+  if(e.target.matches('input,select,textarea')) return;
+  if(e.key===' '){ e.preventDefault(); state.running?stopCam():startCam(); }
+  if(e.key==='Escape') cancelEnrol();
+});
+refreshModelState();
 
 });
 </script>
